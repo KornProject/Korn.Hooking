@@ -1,4 +1,5 @@
 ﻿using Korn.CLR;
+using Korn.Utils.Logger;
 using System.Reflection;
 
 namespace Korn.Hooking;
@@ -8,12 +9,25 @@ public unsafe struct MethodSnapshoot
     public MethodSnapshoot(clr_MethodDesc* methodDesc)
     {
         if (methodDesc is null)
-            throw new ArgumentNullException(
-                $"[Korn.Hooking] MethodSnapshoot->.ctor(clr_MethodDesc*): " +
-                 "The method descriptor is null"
-            );
+            throw new KornError([
+                "MethodSnapshoot->.ctor(clr_MethodDesc*):",
+                "The method descriptor is null."
+            ]);
 
-        var data = methodDesc->GetPrecode()->AsFixupPrecode()->GetData();
+        var precode = methodDesc->GetPrecode();
+        var type = precode->GetType();
+
+        if (!precode->IsFixupPrecode())
+            if (methodDesc is null)
+            throw new KornError([
+                "MethodSnapshoot->.ctor(clr_MethodDesc*):",
+                "The method precode is not Fixup.",
+                "Other precodes is not implemented."
+            ]);
+
+        var fixupPrecode = precode->AsFixupPrecode();        
+        var data = fixupPrecode->GetData();
+
         Target = &data->Target;
         TargetSnapshoot = data->Target;
     }

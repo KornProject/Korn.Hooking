@@ -1,4 +1,5 @@
-﻿using System.Reflection;
+﻿using Korn.Utils.Logger;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 
 namespace Korn.Hooking;
@@ -25,10 +26,16 @@ public unsafe class MethodHook
 
     void VerifySignature(MethodInfo method)
     {
-        var methodParameters = method.GetParameters().Select(param => param.ParameterType).ToList();
-        var targetParameters = TargetMethod.GetParameters().Select(param => param.ParameterType).ToList();
+        var methodParameters = MethodInfoUtils.GetParameters(method);
+        var targetParameters = MethodInfoUtils.GetParameters(TargetMethod);
 
         string? message = null;
+
+        if (!method.IsStatic)
+        {
+            message = "method must be static";
+            goto Return;
+        }
 
         if (method.ReturnType != typeof(bool))
         {
@@ -64,10 +71,10 @@ public unsafe class MethodHook
 
         Return:
         if (message is not null)
-            throw new Exception(
-                $"[Korn.Hooking] MethodHook->VerifySignature: Bad method signature - " + message + ".\n" +
+            throw new KornError([
+                $"MethodHook->VerifySignature: Bad method signature - {message}.",
                 $"Expected signature: {GenerateSignature()}"
-            );
+            ]);
 
         return;
 
@@ -79,7 +86,6 @@ public unsafe class MethodHook
 
             return $"bool HookImplementation({string.Join(' ', types.Select(t => $"ref {t.Name}"))})";
         }
-
     }
 
     public void AddHook(MethodInfoSummary hook)
@@ -88,13 +94,13 @@ public unsafe class MethodHook
 
         var isHooked = IsHooked;
         if (isHooked)
-            Unhook();
+            Disable();
 
         Hooks.Add(hook);
         BuildStub();
 
         if (isHooked)
-            Hook();
+            Enable();
     }
 
     public void RemoveHook(MethodInfoSummary hook)
@@ -103,18 +109,18 @@ public unsafe class MethodHook
 
         if (isRemoved)
         {
-            var isHooked = IsHooked;
-            if (isHooked)
-                Unhook();
+            var isEnabled = IsHooked;
+            if (isEnabled)
+                Disable();
 
             BuildStub();
 
-            if (isHooked)
-                Hook();
+            if (isEnabled)
+                Enable();
         }
     }
 
-    public void Hook()
+    public void Enable()
     {
         if (IsHooked)
             return;
@@ -123,7 +129,7 @@ public unsafe class MethodHook
         *TargetSnapshoot.Target = StubSnapshoot.TargetSnapshoot;
     }
 
-    public void Unhook()
+    public void Disable()
     {
         if (!IsHooked)
             return;
