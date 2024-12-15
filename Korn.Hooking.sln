@@ -9,9 +9,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Korn", "Korn", "{F136C36C-B
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Korn.CLR", "..\Korn.CLR\Korn.CLR\Korn.CLR.csproj", "{C83FA0C7-4C86-4A11-97E5-9D382FEC4BE3}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Korn.Utils.Logger", "..\Korn.Utils.Logger\Korn.Utils.Logger\Korn.Utils.Logger.csproj", "{DAA7F8AE-2831-422C-BE93-28D301D48E5F}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Korn.Utils.System", "..\Korn.Utils.System\Korn.Utils.System\Korn.Utils.System.csproj", "{BB54DE4F-43F5-4CA6-AE60-B3F68D2A0FF3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Korn.Logger", "..\Korn.Logger\Korn.Logger\Korn.Logger.csproj", "{AC7BEB92-19C1-4CB8-A367-DDBD750F5F1A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -37,14 +37,6 @@ Global
 		{C83FA0C7-4C86-4A11-97E5-9D382FEC4BE3}.Release|Any CPU.Build.0 = Release|x64
 		{C83FA0C7-4C86-4A11-97E5-9D382FEC4BE3}.Release|x64.ActiveCfg = Release|x64
 		{C83FA0C7-4C86-4A11-97E5-9D382FEC4BE3}.Release|x64.Build.0 = Release|x64
-		{DAA7F8AE-2831-422C-BE93-28D301D48E5F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{DAA7F8AE-2831-422C-BE93-28D301D48E5F}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{DAA7F8AE-2831-422C-BE93-28D301D48E5F}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{DAA7F8AE-2831-422C-BE93-28D301D48E5F}.Debug|x64.Build.0 = Debug|Any CPU
-		{DAA7F8AE-2831-422C-BE93-28D301D48E5F}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{DAA7F8AE-2831-422C-BE93-28D301D48E5F}.Release|Any CPU.Build.0 = Release|Any CPU
-		{DAA7F8AE-2831-422C-BE93-28D301D48E5F}.Release|x64.ActiveCfg = Release|Any CPU
-		{DAA7F8AE-2831-422C-BE93-28D301D48E5F}.Release|x64.Build.0 = Release|Any CPU
 		{BB54DE4F-43F5-4CA6-AE60-B3F68D2A0FF3}.Debug|Any CPU.ActiveCfg = Debug|x64
 		{BB54DE4F-43F5-4CA6-AE60-B3F68D2A0FF3}.Debug|Any CPU.Build.0 = Debug|x64
 		{BB54DE4F-43F5-4CA6-AE60-B3F68D2A0FF3}.Debug|x64.ActiveCfg = Debug|x64
@@ -53,13 +45,21 @@ Global
 		{BB54DE4F-43F5-4CA6-AE60-B3F68D2A0FF3}.Release|Any CPU.Build.0 = Release|x64
 		{BB54DE4F-43F5-4CA6-AE60-B3F68D2A0FF3}.Release|x64.ActiveCfg = Release|x64
 		{BB54DE4F-43F5-4CA6-AE60-B3F68D2A0FF3}.Release|x64.Build.0 = Release|x64
+		{AC7BEB92-19C1-4CB8-A367-DDBD750F5F1A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AC7BEB92-19C1-4CB8-A367-DDBD750F5F1A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AC7BEB92-19C1-4CB8-A367-DDBD750F5F1A}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{AC7BEB92-19C1-4CB8-A367-DDBD750F5F1A}.Debug|x64.Build.0 = Debug|Any CPU
+		{AC7BEB92-19C1-4CB8-A367-DDBD750F5F1A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AC7BEB92-19C1-4CB8-A367-DDBD750F5F1A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AC7BEB92-19C1-4CB8-A367-DDBD750F5F1A}.Release|x64.ActiveCfg = Release|Any CPU
+		{AC7BEB92-19C1-4CB8-A367-DDBD750F5F1A}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{C83FA0C7-4C86-4A11-97E5-9D382FEC4BE3} = {F136C36C-BA80-405F-83F5-F42F2227D6AA}
-		{DAA7F8AE-2831-422C-BE93-28D301D48E5F} = {F136C36C-BA80-405F-83F5-F42F2227D6AA}
 		{BB54DE4F-43F5-4CA6-AE60-B3F68D2A0FF3} = {F136C36C-BA80-405F-83F5-F42F2227D6AA}
+		{AC7BEB92-19C1-4CB8-A367-DDBD750F5F1A} = {F136C36C-BA80-405F-83F5-F42F2227D6AA}
 	EndGlobalSection
 EndGlobal

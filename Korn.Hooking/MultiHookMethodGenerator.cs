@@ -1,7 +1,6 @@
 ﻿using System.Linq.Expressions;
 using System.Reflection.Emit;
 using System.Reflection;
-using Korn.Utils.Logger;
 
 namespace Korn.Hooking;
 public unsafe static class MultiHookMethodGenerator

@@ -1,5 +1,4 @@
-﻿using Korn.Utils.Logger;
-using System.Reflection;
+﻿using System.Reflection;
 using System.Runtime.CompilerServices;
 
 namespace Korn.Hooking;
