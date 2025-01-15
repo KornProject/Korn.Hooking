@@ -58,7 +58,7 @@ public unsafe static class MultiHookMethodGenerator
         Type delegateType;
         if (target.ReturnType == typeof(void))
             delegateType = Expression.GetActionType(targetParameters);
-        else delegateType = Expression.GetFuncType([target.ReturnType, ..targetParameters]);
+        else delegateType = Expression.GetFuncType([..targetParameters, target.ReturnType]);
 
         try
         {
@@ -81,13 +81,7 @@ public unsafe static class MultiHookMethodGenerator
             var targetLocal = il.DeclareLocal(typeof(void).MakePointerType().MakePointerType());
             var returnLabel = il.DefineLabel();
 
-            var targetParameters = 
-                target
-                .GetParameters()
-                .Select(param => param.ParameterType)
-                .ToList();
-            if (!target.IsStatic)
-                targetParameters.Insert(0, target.DeclaringType!);
+            var targetParameters = MethodInfoUtils.GetParameters(target);
 
             long targetPointerAddress = (nint)methodHook.TargetSnapshoot.Target;
             long targetAddress = (nint)methodHook.TargetSnapshoot.TargetSnapshoot;
@@ -106,7 +100,7 @@ public unsafe static class MultiHookMethodGenerator
                 /* hooks calling */
                 foreach (var hook in hooks)
                 {
-                    for (var argIndex = 0; argIndex < targetParameters.Count; argIndex++)
+                    for (var argIndex = 0; argIndex < targetParameters.Length; argIndex++)
                         il.Emit(OpCodes.Ldarga_S, (byte)argIndex);
 
                     il.Emit(OpCodes.Call, hook);
@@ -114,7 +108,7 @@ public unsafe static class MultiHookMethodGenerator
                 }
 
                 /* target method calling */
-                for (var argIndex = 0; argIndex < targetParameters.Count; argIndex++)
+                for (var argIndex = 0; argIndex < targetParameters.Length; argIndex++)
                 {
                     if (targetParameters[argIndex].IsByRef)
                         il.Emit(OpCodes.Ldarga_S, (byte)argIndex);
@@ -133,6 +127,8 @@ public unsafe static class MultiHookMethodGenerator
             }
             else
             {
+                var resultLocal = il.DeclareLocal(target.ReturnType);
+
                 /* prologue */
                 il.Emit(OpCodes.Ldc_I8, targetPointerAddress);
                 il.Emit(OpCodes.Conv_I);
@@ -145,7 +141,7 @@ public unsafe static class MultiHookMethodGenerator
                 /* hooks calling */
                 foreach (var hook in hooks)
                 {
-                    for (var argIndex = 0; argIndex < targetParameters.Count; argIndex++)
+                    for (var argIndex = 0; argIndex < targetParameters.Length; argIndex++)
                         il.Emit(OpCodes.Ldarga_S, (byte)argIndex);
                     il.Emit(OpCodes.Ldloca_S, 1);
 
@@ -154,7 +150,7 @@ public unsafe static class MultiHookMethodGenerator
                 }
 
                 /* target method calling */
-                for (var argIndex = 0; argIndex < targetParameters.Count; argIndex++)
+                for (var argIndex = 0; argIndex < targetParameters.Length; argIndex++)
                 {
                     if (targetParameters[argIndex].IsByRef)
                         il.Emit(OpCodes.Ldarga_S, (byte)argIndex);

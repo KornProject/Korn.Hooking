@@ -1,4 +1,5 @@
-﻿using System.Reflection;
+﻿using Korn.CLR;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 
 namespace Korn.Hooking;
@@ -9,9 +10,11 @@ public unsafe class MethodHook
     MethodHook(MethodInfoSummary targetMethod)
     {
         TargetMethod = targetMethod;
-
-        RuntimeHelpers.PrepareMethod(TargetMethod.MethodHandle);
+        
+        CheckMethod();
         TargetSnapshoot = new(targetMethod);
+
+        ActiveHooks.Add(this);
     }
 
     public readonly MethodSnapshoot TargetSnapshoot;
@@ -21,7 +24,16 @@ public unsafe class MethodHook
     public MethodInfo? StubMethod { get; private set; }
 
     public readonly List<MethodInfo> Hooks = [];
-    public bool IsHooked { get; private set; }
+    public bool IsEnabled { get; private set; }
+
+    void CheckMethod()
+    {
+        var desc = clr_MethodDesc.ExtractFrom(TargetMethod);
+        desc->IsEligibleForTieredCompilation = false;
+        
+        MemoryRightsUtils.RemoveRightsRestrionsFromAddress((nint)desc->ImplAttributes);
+        *desc->ImplAttributes = CorMethodImpl.IL | CorMethodImpl.NoOptimization | CorMethodImpl.NoInlining;
+    }
 
     void VerifySignature(MethodInfo method)
     {
@@ -87,28 +99,32 @@ public unsafe class MethodHook
         }
     }
 
-    public void AddHook(MethodInfoSummary hook)
+    public MethodHook AddHook(Delegate hookDelegate) => AddHook(hookDelegate.Method);
+    public MethodHook AddHook(MethodInfoSummary hook)
     {
         VerifySignature(hook);
 
-        var isHooked = IsHooked;
-        if (isHooked)
+        var isEnabled = IsEnabled;
+        if (isEnabled)
             Disable();
 
         Hooks.Add(hook);
         BuildStub();
 
-        if (isHooked)
+        if (isEnabled)
             Enable();
+
+        return this;
     }
 
-    public void RemoveHook(MethodInfoSummary hook)
+    public MethodHook RemoveHook(Delegate hookDelegate) => RemoveHook(hookDelegate.Method);
+    public MethodHook RemoveHook(MethodInfoSummary hook)
     {
         var isRemoved = Hooks.Remove(hook);
 
         if (isRemoved)
         {
-            var isEnabled = IsHooked;
+            var isEnabled = IsEnabled;
             if (isEnabled)
                 Disable();
 
@@ -117,22 +133,24 @@ public unsafe class MethodHook
             if (isEnabled)
                 Enable();
         }
+
+        return this;
     }
 
     public void Enable()
     {
-        if (IsHooked)
+        if (IsEnabled)
             return;
-        IsHooked = true;
+        IsEnabled = true;
 
         *TargetSnapshoot.Target = StubSnapshoot.TargetSnapshoot;
     }
 
     public void Disable()
     {
-        if (!IsHooked)
+        if (!IsEnabled)
             return;
-        IsHooked = false;
+        IsEnabled = false;
 
         *TargetSnapshoot.Target = TargetSnapshoot.TargetSnapshoot;
     }
@@ -143,6 +161,7 @@ public unsafe class MethodHook
         StubSnapshoot = new(StubMethod);
     }
 
+    public static MethodHook Create(Delegate targetMethodDelegate) => Create(targetMethodDelegate.Method);
     public static MethodHook Create(MethodInfoSummary targetMethod)
     {
         var existsHook = ActiveHooks.FirstOrDefault(hook => hook.TargetMethod == targetMethod.Method);

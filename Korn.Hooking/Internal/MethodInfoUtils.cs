@@ -1,7 +1,6 @@
 ﻿using System.Reflection;
 
-namespace Korn.Hooking;
-public static class MethodInfoUtils
+static class MethodInfoUtils
 {
     // Unlike the original MethodInfo.GetParameters this method adds to the parameters of this.
     // Not used extensions, as it may confuse developers.
