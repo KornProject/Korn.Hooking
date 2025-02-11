@@ -1,15 +1,13 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
+    <TargetFrameworks>net8.0-windows;net472</TargetFrameworks>
     <Platforms>x64</Platforms>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Korn.CLR\Korn.CLR\Korn.CLR.csproj" />
+    <ProjectReference Include="..\..\Korn.CoreCLR\Korn.CoreCLR\Korn.CoreCLR.csproj" />
     <ProjectReference Include="..\..\Korn.Logger\Korn.Logger\Korn.Logger.csproj" />
     <ProjectReference Include="..\..\Korn.Utils.System\Korn.Utils.System\Korn.Utils.System.csproj" />
   </ItemGroup>

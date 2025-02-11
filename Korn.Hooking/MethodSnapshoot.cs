@@ -1,4 +1,4 @@
-﻿using Korn.CLR;
+﻿using Korn.CoreCLR;
 using System.Reflection;
 
 namespace Korn.Hooking;
@@ -18,11 +18,11 @@ public unsafe struct MethodSnapshoot
 
         if (!precode->IsFixupPrecode())
             if (methodDesc is null)
-            throw new KornError([
-                "MethodSnapshoot->.ctor(clr_MethodDesc*):",
-                "The method precode is not Fixup.",
-                "Other precodes is not implemented."
-            ]);
+                throw new KornError([
+                    "MethodSnapshoot->.ctor(clr_MethodDesc*):",
+                    "The method precode is not Fixup.",
+                    "Other precodes is not implemented."
+                ]);
 
         var fixupPrecode = precode->AsFixupPrecode();        
         var data = fixupPrecode->GetData();
