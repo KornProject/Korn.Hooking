@@ -7,9 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Korn.CoreCLR\Korn.CoreCLR\Korn.CoreCLR.csproj" />
     <ProjectReference Include="..\..\Korn.Logger\Korn.Logger\Korn.Logger.csproj" />
-    <ProjectReference Include="..\..\Korn.Utils.System\Korn.Utils.System\Korn.Utils.System.csproj" />
+    <ProjectReference Include="..\..\Korn.Shared\Korn.Shared.Internal\Korn.Shared.Internal.csproj" />
+    <ProjectReference Include="..\..\Korn.Shared\Korn.Shared\Korn.Shared.csproj" />
+    <ProjectReference Include="..\..\Korn.Utils.Memory\Korn.Utils.Memory\Korn.Utils.Memory.csproj" />
   </ItemGroup>
 
 </Project>
