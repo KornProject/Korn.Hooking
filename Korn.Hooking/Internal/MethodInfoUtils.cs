@@ -1,4 +1,6 @@
-﻿using System.Reflection;
+﻿using System;
+using System.Linq;
+using System.Reflection;
 
 static class MethodInfoUtils
 {
@@ -6,14 +8,14 @@ static class MethodInfoUtils
     // Not used extensions, as it may confuse developers.
     public static Type[] GetParameters(MethodInfo method)
     {
-        var parameters = 
+        var parameters =
             method
             .GetParameters()
             .Select(param => param.ParameterType)
             .ToList();
 
         if (!method.IsStatic)
-            parameters.Insert(0, method.DeclaringType!);
+            parameters.Insert(0, method.DeclaringType);
 
         return parameters.ToArray();
     }

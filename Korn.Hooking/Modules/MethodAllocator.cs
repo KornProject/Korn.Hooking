@@ -9,11 +9,12 @@ namespace Korn.Hooking
     public unsafe class MethodAllocator : IDisposable
     {
         const int RoutineRegionAllocationSize = 0x10000;
+        const int ArraysRegionAllocationSize = 0x10000;
         const int IndirectRegionAllocationSize = 0x1000;
 
         static bool isInitialized;
         static MethodAllocator instance;
-        public static MethodAllocator Instance 
+        public static MethodAllocator Instance
         {
             get
             {
@@ -30,14 +31,14 @@ namespace Korn.Hooking
         {
             regionAllocator = new RegionAllocator();
             caveFinder = new CaveFinder();
-            routineRegionAllocator = new RoutineRegionAllocator(regionAllocator);
-            indirectRegionAllocator = new IndirectRegionAllocator(regionAllocator, caveFinder);
+            routineRegionAllocator = new RoutinesRegion.Allocator(regionAllocator);
+            indirectRegionAllocator = new IndirectsRegion.Allocator(regionAllocator, caveFinder);
         }
 
         RegionAllocator regionAllocator;
         CaveFinder caveFinder;
-        RoutineRegionAllocator routineRegionAllocator;
-        IndirectRegionAllocator indirectRegionAllocator;
+        RoutinesRegion.Allocator routineRegionAllocator;
+        IndirectsRegion.Allocator indirectRegionAllocator;
 
         public AllocatedMethod AllocateMethod(byte[] routineBytes)
         {
@@ -73,7 +74,7 @@ namespace Korn.Hooking
 
         public class AllocatedMethod : IDisposable
         {
-            public AllocatedMethod(IndirectRegionAllocator indirectRegionAllocator, RoutinesRegion.Routine routine)
+            public AllocatedMethod(IndirectsRegion.Allocator indirectRegionAllocator, RoutinesRegion.Routine routine)
             {
                 this.indirectRegionAllocator = indirectRegionAllocator;
                 Routine = routine;
@@ -81,7 +82,7 @@ namespace Korn.Hooking
 
             public RoutinesRegion.Routine Routine { get; private set; }
             public List<IndirectsRegion.Indirect> Indirects { get; private set; } = new List<IndirectsRegion.Indirect>();
-            IndirectRegionAllocator indirectRegionAllocator;
+            IndirectsRegion.Allocator indirectRegionAllocator;
 
             public IndirectsRegion.Indirect CreateIndirect(IntPtr fromAddress)
             {
@@ -97,97 +98,7 @@ namespace Korn.Hooking
                 foreach (var indirect in Indirects)
                     indirect.Dispose();
             }
-        }
-
-        public class IndirectRegionAllocator
-        {
-            public IndirectRegionAllocator(RegionAllocator regionAllocator, CaveFinder caveFinder)
-            {
-                this.regionAllocator = regionAllocator;
-                this.caveFinder = caveFinder;
-            }
-
-            List<IndirectsRegion> regions = new List<IndirectsRegion>();
-            RegionAllocator regionAllocator;
-            CaveFinder caveFinder;
-
-            public IndirectsRegion.Indirect CreateIndirect(IntPtr nearTo, IntPtr indirectAddress)
-            {
-                var region = GetIndirectsRegion(nearTo);
-                var indirect = region.CreateIndirect(indirectAddress);
-                return indirect;
-            }
-
-            IndirectsRegion GetIndirectsRegion(IntPtr nearTo)
-            {
-                foreach (var region in regions)
-                {
-                    if (region.MemoryRegion.IsNearTo(nearTo))
-                        if (region.HasFreeIndirectSlot)
-                            return region;
-                }
-
-                return CreateIndirectRegion(nearTo);
-            }
-
-            IndirectsRegion CreateIndirectRegion(IntPtr nearTo)
-            {
-                var memoryRegion = FindMemoryRegion();
-                var region = new IndirectsRegion(memoryRegion);
-                return region;
-
-                MemoryRegion FindMemoryRegion()
-                {
-                    var allocatedRegion = regionAllocator.AllocateNearMemory(nearTo, IndirectRegionAllocationSize);
-                    if (allocatedRegion != null)
-                        return allocatedRegion;
-
-                    var caveRegion = caveFinder.FindMemoryCave(nearTo);
-                    return caveRegion;
-                }
-            }
-        }
-
-        public class RoutineRegionAllocator
-        {
-            public RoutineRegionAllocator(RegionAllocator regionAllocator)
-            {
-                this.regionAllocator = regionAllocator;
-            }
-
-            List<RoutinesRegion> regions = new List<RoutinesRegion>();
-            RegionAllocator regionAllocator;
-
-            public RoutinesRegion.Routine CreateRoutine(byte[] routineBytes)
-            {
-                fixed (byte* routineBytesPointer = routineBytes)
-                    return CreateRoutine(routineBytesPointer, routineBytes.Length);
-            }
-
-            public RoutinesRegion.Routine CreateRoutine(byte* routineBytes, int routineSize)
-            {
-                var region = GetRoutinesRegion(routineSize);
-                return region.AddRoutine(routineBytes, routineSize);
-            }
-
-            RoutinesRegion GetRoutinesRegion(int requestedSize)
-            {
-                foreach (var region in regions)
-                    if (region.HasSpaceForNewRoutine(requestedSize))
-                        return region;
-
-                return CreateRoutinesRegion();
-            }
-
-            RoutinesRegion CreateRoutinesRegion()
-            {
-                var memoryRegion = regionAllocator.AllocateMemory(RoutineRegionAllocationSize);
-
-                var region = new RoutinesRegion(memoryRegion);
-                regions.Add(region);
-                return region;
-            }
-        }
+        }        
 
         public class RegionAllocator : IDisposable
         {
@@ -262,7 +173,7 @@ namespace Korn.Hooking
                 if (cave == null)
                     cave = FindFreeCaveNearBot(address, mbi);
                 if (cave == null)
-                    throw new InvalidOperationException(
+                    throw new KornError(
                         "Korn.Hooking.MethodAllocator: " +
                         "There are no free regions or caves to allocate memory for hooking funtionality, the arrow struck Achilles' heel 😞"
                     );
@@ -354,7 +265,7 @@ namespace Korn.Hooking
             {
                 var index = statusStorage.GetFreeStatusIndex();
                 if (index == -1) 
-                    throw new InvalidOperationException(
+                    throw new KornError(
                         "Korn.Hooking.MethodAllocator.IndirectsRegion->CreateIndirect: " + 
                         "Bad check for free indirect slots. There are no free slots in this region"
                     );
@@ -497,6 +408,230 @@ namespace Korn.Hooking
                     Reserved = 1
                 }
             }
+
+            public class Allocator
+            {
+                public Allocator(RegionAllocator regionAllocator, CaveFinder caveFinder)
+                {
+                    this.regionAllocator = regionAllocator;
+                    this.caveFinder = caveFinder;
+                }
+
+                List<IndirectsRegion> regions = new List<IndirectsRegion>();
+                RegionAllocator regionAllocator;
+                CaveFinder caveFinder;
+
+                public Indirect CreateIndirect(IntPtr nearTo, IntPtr indirectAddress)
+                {
+                    var region = GetIndirectsRegion(nearTo);
+                    var indirect = region.CreateIndirect(indirectAddress);
+                    return indirect;
+                }
+
+                IndirectsRegion GetIndirectsRegion(IntPtr nearTo)
+                {
+                    foreach (var region in regions)
+                    {
+                        if (region.MemoryRegion.IsNearTo(nearTo))
+                            if (region.HasFreeIndirectSlot)
+                                return region;
+                    }
+
+                    return CreateIndirectRegion(nearTo);
+                }
+
+                IndirectsRegion CreateIndirectRegion(IntPtr nearTo)
+                {
+                    var memoryRegion = FindMemoryRegion();
+                    var region = new IndirectsRegion(memoryRegion);
+                    return region;
+
+                    MemoryRegion FindMemoryRegion()
+                    {
+                        var allocatedRegion = regionAllocator.AllocateNearMemory(nearTo, IndirectRegionAllocationSize);
+                        if (allocatedRegion != null)
+                            return allocatedRegion;
+
+                        var caveRegion = caveFinder.FindMemoryCave(nearTo);
+                        return caveRegion;
+                    }
+                }
+            }
+        }
+
+        public class LinkedArraysRegion : IDisposable
+        {
+            public LinkedArraysRegion(MemoryRegion.Allocated allocatedMemory)
+                => AllocatedMemory = allocatedMemory;
+
+            public MemoryRegion.Allocated AllocatedMemory { get; private set; }
+            public bool HasSpace { get; private set; }  = true;
+            
+            void UpdateHasSpace()
+            {
+                var pointer = (LinkedArray.Node*)AllocatedMemory.Address;
+                var count = AllocatedMemory.Size / sizeof(LinkedArray.Node);
+
+                for (var i = 0; i < count; i++)
+                    if (!pointer->IsValid)
+                    {
+                        HasSpace = true;
+                        return;
+                    }
+                    else pointer++;
+
+                HasSpace = false;
+            }
+
+            public LinkedArray.Node* AllocateNode(IntPtr value)
+            {
+                lock (AllocatedMemory)
+                {
+                    if (!HasSpace)
+                        throw new KornException(
+                            "Korn.Hooking.MethodAllocator.LinkedArraysRegion->AllocateNode",
+                            "Bad check for free indirect slots. There are no free slots in this region"
+                        );
+
+                    var node = FindFreeNode();
+                    node->Value = value;
+
+                    UpdateHasSpace();
+                    return node;
+                }
+            }
+
+            LinkedArray.Node* FindFreeNode()
+            {
+                var pointer = (LinkedArray.Node*)AllocatedMemory.Address;
+                var count = AllocatedMemory.Size / sizeof(LinkedArray.Node);
+                for (var i = 0; i < count; i++)
+                    if (!pointer->IsValid)
+                        return pointer;
+
+                throw new KornException(
+                    "Korn.Hooking.MethodAllocator.LinkedArraysRegion->AllocateNode",
+                    "Bad check for free indirect slots. There are no free slots in this region"
+                );
+            }
+
+            public void Dispose() => AllocatedMemory.Dispose();
+
+            public class LinkedArray : IDisposable
+            {
+                public LinkedArray(Allocator alloctor, Node* rootNode)
+                {
+                    this.alloctor = alloctor;
+                    RootNode = rootNode;
+                    LastNode = rootNode;
+                }
+
+                Allocator alloctor;
+                public Node* RootNode;
+                public Node* LastNode;
+
+                public void AddNode(IntPtr address)
+                {
+                    var node = alloctor.AllocateNode(address);
+                    LastNode = LastNode->Next = node;
+                }
+
+                public void RemoveNode(Node* node)
+                {
+                    if (RootNode == node)
+                    {
+                        var removedNode = RootNode;
+                        RootNode = node->Next;
+                        removedNode->DestroyNode();
+                    }
+                }
+
+                public void Dispose() => RootNode->DestroySequence();
+
+                public struct Node
+                {
+                    public IntPtr Value;
+                    public Node* Next;
+
+                    public bool IsValid => !(Value == IntPtr.Zero && Next == null);
+                    public bool HasNext => Next != null;
+
+                    public void DestroySequence()
+                    {
+                        fixed (Node* self = &this)
+                        {
+                            var next = self;
+
+                            do
+                            {
+                                next->Value = IntPtr.Zero;
+                                var nextNext = next->Next;
+                                next = nextNext;
+                            }
+                            while (next != null);
+                        }
+                    }
+
+                    public void DestroyNode()
+                    {
+                        Value = IntPtr.Zero;
+                        Next = null;
+                    }
+                }
+            }
+
+            public class Allocator : IDisposable
+            {
+                public Allocator(RegionAllocator regionAllocator)
+                {
+                    this.regionAllocator = regionAllocator;
+                }
+
+                List<LinkedArray> arrays = new List<LinkedArray>();
+
+                RegionAllocator regionAllocator;
+                List<LinkedArraysRegion> regions = new List<LinkedArraysRegion>();
+
+                public LinkedArray CreateArray(IntPtr startValue)
+                {
+                    var region = GetFreeRegion();
+                    var node = region.AllocateNode(startValue);
+
+                    var array = new LinkedArray(this, node);
+                    return array;
+                }
+
+                public LinkedArray.Node* AllocateNode(IntPtr value)
+                {
+                    var region = GetFreeRegion();
+                    var node = region.AllocateNode(value);
+
+                    return node;
+                }
+                
+                LinkedArraysRegion GetFreeRegion()
+                {
+                    foreach (var region in regions)
+                        if (region.HasSpace)
+                            return region;
+
+                    return AllocateRegion();
+                }
+
+                LinkedArraysRegion AllocateRegion()
+                {
+                    var memoryRegion = regionAllocator.AllocateMemory(ArraysRegionAllocationSize);
+                    var region = new LinkedArraysRegion(memoryRegion);
+                    regions.Add(region);
+                    return region;
+                }
+
+                public void Dispose()
+                {
+                    foreach (var region in regions)
+                        region.Dispose();
+                }
+            }
         }
 
         public class RoutinesRegion : IDisposable
@@ -609,6 +744,47 @@ namespace Korn.Hooking
 
                     ZeroMemory();
                     RoutinesRegion.RemoveRoutine(this);
+                }
+            }
+
+            public class Allocator
+            {
+                public Allocator(RegionAllocator regionAllocator)
+                {
+                    this.regionAllocator = regionAllocator;
+                }
+
+                List<RoutinesRegion> regions = new List<RoutinesRegion>();
+                RegionAllocator regionAllocator;
+
+                public Routine CreateRoutine(byte[] routineBytes)
+                {
+                    fixed (byte* routineBytesPointer = routineBytes)
+                        return CreateRoutine(routineBytesPointer, routineBytes.Length);
+                }
+
+                public Routine CreateRoutine(byte* routineBytes, int routineSize)
+                {
+                    var region = GetRoutinesRegion(routineSize);
+                    return region.AddRoutine(routineBytes, routineSize);
+                }
+
+                RoutinesRegion GetRoutinesRegion(int requestedSize)
+                {
+                    foreach (var region in regions)
+                        if (region.HasSpaceForNewRoutine(requestedSize))
+                            return region;
+
+                    return CreateRoutinesRegion();
+                }
+
+                RoutinesRegion CreateRoutinesRegion()
+                {
+                    var memoryRegion = regionAllocator.AllocateMemory(RoutineRegionAllocationSize);
+
+                    var region = new RoutinesRegion(memoryRegion);
+                    regions.Add(region);
+                    return region;
                 }
             }
         }

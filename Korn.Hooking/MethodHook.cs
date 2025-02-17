@@ -1,175 +1,166 @@
-﻿using Korn.CoreCLR;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 
-namespace Korn.Hooking;
-public unsafe class MethodHook
+namespace Korn.Hooking
 {
-    static List<MethodHook> ActiveHooks = [];
-
-    MethodHook(MethodInfoSummary targetMethod)
+    public unsafe class MethodHook
     {
-        TargetMethod = targetMethod;
-        
-        CheckMethod();
-        TargetSnapshoot = new(targetMethod);
+        static List<MethodHook> ActiveHooks = new List<MethodHook>();
 
-        ActiveHooks.Add(this);
-    }
-
-    public readonly MethodSnapshoot TargetSnapshoot;
-    public readonly MethodInfo TargetMethod;
-
-    public MethodSnapshoot StubSnapshoot { get; private set; }
-    public MethodInfo? StubMethod { get; private set; }
-
-    public readonly List<MethodInfo> Hooks = [];
-    public bool IsEnabled { get; private set; }
-
-    void CheckMethod()
-    {
-        var desc = clr_MethodDesc.ExtractFrom(TargetMethod);
-        desc->IsEligibleForTieredCompilation = false;
-        
-        MemoryRightsUtils.RemoveRightsRestrionsFromAddress((nint)desc->ImplAttributes);
-        *desc->ImplAttributes = CorMethodImpl.IL | CorMethodImpl.NoOptimization | CorMethodImpl.NoInlining;
-    }
-
-    void VerifySignature(MethodInfo method)
-    {
-        var methodParameters = MethodInfoUtils.GetParameters(method);
-        var targetParameters = MethodInfoUtils.GetParameters(TargetMethod);
-
-        string? message = null;
-
-        if (!method.IsStatic)
+        MethodHook(MethodInfoSummary targetMethod)
         {
-            message = "method must be static";
-            goto Return;
+            TargetMethod = targetMethod;
+
+            TargetStatement = new MethodStatement(targetMethod);
+            TargetStatement.EnsureMethodIsCompiled();
+
+            ActiveHooks.Add(this);
         }
 
-        if (method.ReturnType != typeof(bool))
+        public readonly MethodStatement TargetStatement;
+        public readonly MethodInfo TargetMethod;
+
+        public MethodStatement StubStatement { get; private set; }
+        public MethodInfo StubMethod { get; private set; }
+
+        public readonly List<MethodInfo> Hooks = new List<MethodInfo>();
+        public bool IsEnabled { get; private set; }
+
+        void VerifySignature(MethodInfo method)
         {
-            message = "return type must be 'bool'";
-            goto Return;
-        }
+            var methodParameters = MethodInfoUtils.GetParameters(method);
+            var targetParameters = MethodInfoUtils.GetParameters(TargetMethod);
 
-        var exprectedArgumentTypes = targetParameters.ToList();
-        if (TargetMethod.ReturnType != typeof(void))
-            exprectedArgumentTypes.Add(TargetMethod.ReturnType);
+            string message = null;
 
-        if (method.GetParameters().Length != exprectedArgumentTypes.Count)
-        {
-            message = "wrong number of arguments";
-            goto Return;
-        }
-
-        var foundNonRefArgument = methodParameters.FirstOrDefault(param => !param.IsByRef);
-        if (foundNonRefArgument is not null)
-        {
-            message = "all arguments must have the ref modifier";
-            goto Return;
-        }
-
-        for (var argIndex = 0; argIndex < exprectedArgumentTypes.Count; argIndex++)
-            if (exprectedArgumentTypes[argIndex].FullName!.Contains(methodParameters[argIndex].FullName!))
-            // you are laughing, but I really don't know how to do type checking with RefBy ignored
+            if (!method.IsStatic)
             {
-                message = $"the type of {argIndex + 1}-th, {methodParameters[argIndex].Name}, " +
-                          $"argument is not the same as expected {exprectedArgumentTypes[argIndex].Name}";
+                message = "method must be static";
                 goto Return;
             }
 
-        Return:
-        if (message is not null)
-            throw new KornError([
-                $"MethodHook->VerifySignature: Bad method signature - {message}.",
-                $"Expected signature: {GenerateSignature()}"
-            ]);
+            if (method.ReturnType != typeof(bool))
+            {
+                message = "return type must be 'bool'";
+                goto Return;
+            }
 
-        return;
-
-        string GenerateSignature()
-        {
-            var types = TargetMethod.GetParameters().Select(param => param.ParameterType).ToList();
+            var exprectedArgumentTypes = targetParameters.ToList();
             if (TargetMethod.ReturnType != typeof(void))
-                types.Add(TargetMethod.ReturnType);
+                exprectedArgumentTypes.Add(TargetMethod.ReturnType);
 
-            return $"bool HookImplementation({string.Join(' ', types.Select(t => $"ref {t.Name}"))})";
+            if (method.GetParameters().Length != exprectedArgumentTypes.Count)
+            {
+                message = "wrong number of arguments";
+                goto Return;
+            }
+
+            var foundNonRefArgument = methodParameters.FirstOrDefault(param => !param.IsByRef);
+            if (foundNonRefArgument != null)
+            {
+                message = "all arguments must have the ref modifier";
+                goto Return;
+            }
+
+            for (var argIndex = 0; argIndex < exprectedArgumentTypes.Count; argIndex++)
+                if (exprectedArgumentTypes[argIndex].FullName.Contains(methodParameters[argIndex].FullName))
+                // you are laughing, but I really don't know how to do type checking with RefBy ignored
+                {
+                    message = $"the type of {argIndex + 1}-th, {methodParameters[argIndex].Name}, " +
+                              $"argument is not the same as expected {exprectedArgumentTypes[argIndex].Name}";
+                    goto Return;
+                }
+
+            Return:
+            if (message != null)
+                throw new KornError(
+                    $"MethodHook->VerifySignature: Bad method signature - {message}.",
+                    $"Expected signature: {GenerateSignature()}"
+                );
+
+            return;
+
+            string GenerateSignature()
+            {
+                var types = TargetMethod.GetParameters().Select(param => param.ParameterType).ToList();
+                if (TargetMethod.ReturnType != typeof(void))
+                    types.Add(TargetMethod.ReturnType);
+
+                return $"bool HookImplementation({string.Join(" ", types.Select(t => $"ref {t.Name}"))})";
+            }
         }
-    }
 
-    public MethodHook AddHook(Delegate hookDelegate) => AddHook(hookDelegate.Method);
-    public MethodHook AddHook(MethodInfoSummary hook)
-    {
-        VerifySignature(hook);
-
-        var isEnabled = IsEnabled;
-        if (isEnabled)
-            Disable();
-
-        Hooks.Add(hook);
-        BuildStub();
-
-        if (isEnabled)
-            Enable();
-
-        return this;
-    }
-
-    public MethodHook RemoveHook(Delegate hookDelegate) => RemoveHook(hookDelegate.Method);
-    public MethodHook RemoveHook(MethodInfoSummary hook)
-    {
-        var isRemoved = Hooks.Remove(hook);
-
-        if (isRemoved)
+        public MethodHook AddHook(Delegate hookDelegate) => AddHook(hookDelegate.Method);
+        public MethodHook AddHook(MethodInfoSummary hook)
         {
+            VerifySignature(hook);
+
             var isEnabled = IsEnabled;
             if (isEnabled)
                 Disable();
 
+            Hooks.Add(hook);
             BuildStub();
 
             if (isEnabled)
                 Enable();
+
+            return this;
         }
 
-        return this;
-    }
+        public MethodHook RemoveHook(Delegate hookDelegate) => RemoveHook(hookDelegate.Method);
+        public MethodHook RemoveHook(MethodInfoSummary hook)
+        {
+            var isRemoved = Hooks.Remove(hook);
 
-    public void Enable()
-    {
-        if (IsEnabled)
-            return;
-        IsEnabled = true;
+            if (isRemoved)
+            {
+                var isEnabled = IsEnabled;
+                if (isEnabled)
+                    Disable();
 
-        *TargetSnapshoot.Target = StubSnapshoot.TargetSnapshoot;
-    }
+                BuildStub();
 
-    public void Disable()
-    {
-        if (!IsEnabled)
-            return;
-        IsEnabled = false;
+                if (isEnabled)
+                    Enable();
+            }
 
-        *TargetSnapshoot.Target = TargetSnapshoot.TargetSnapshoot;
-    }
+            return this;
+        }
 
-    void BuildStub()
-    {
-        StubMethod = MultiHookMethodGenerator.Generate(this, TargetMethod, Hooks);
-        StubSnapshoot = new(StubMethod);
-    }
+        public void Enable()
+        {
+            if (IsEnabled)
+                return;
+            IsEnabled = true;
 
-    public static MethodHook Create(Delegate targetMethodDelegate) => Create(targetMethodDelegate.Method);
-    public static MethodHook Create(MethodInfoSummary targetMethod)
-    {
-        var existsHook = ActiveHooks.FirstOrDefault(hook => hook.TargetMethod == targetMethod.Method);
-        if (existsHook is not null)
-            return existsHook;
-        return new(targetMethod);
+            //*TargetStatement.Target = StubSnapshoot.TargetSnapshoot;
+        }
+
+        public void Disable()
+        {
+            if (!IsEnabled)
+                return;
+            IsEnabled = false;
+
+            //*TargetStatement.Target = TargetStatement.TargetSnapshoot;
+        }
+
+        void BuildStub()
+        {
+            //StubMethod = MultiHookMethodGenerator.Generate(this, TargetMethod, Hooks);
+            StubStatement = new MethodStatement(StubMethod);
+        }
+
+        public static MethodHook Create(Delegate targetMethodDelegate) => Create(targetMethodDelegate.Method);
+        public static MethodHook Create(MethodInfoSummary targetMethod)
+        {
+            var existsHook = ActiveHooks.FirstOrDefault(hook => hook.TargetMethod == targetMethod.Method);
+            if (existsHook != null)
+                return existsHook;
+            return new MethodHook(targetMethod);
+        }
     }
 }
