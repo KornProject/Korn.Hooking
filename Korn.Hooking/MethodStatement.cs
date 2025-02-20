@@ -36,7 +36,7 @@ namespace Korn.Hooking
             IntPtr method = MethodHandle.GetFunctionPointer();
 
 #if NET8_0
-            if ((*(uint*)method & 0xFFFFFFFF) == 0x66666666)
+            if (*(uint*)method == 0x66666666)
                 method += sizeof(int);
 
             if (*(ushort*)method == 0x25FF &&
@@ -50,6 +50,7 @@ namespace Korn.Hooking
                     return;
                 }
 
+                method = innerMethod;
                 if ((*(uint*)method & 0xFFFFFF) == 0x058B48 &&
                     *(byte*)(method + 0x07) == 0x66 &&
                     *(ushort*)(method + 0x0A) == 0x0674)
@@ -57,6 +58,8 @@ namespace Korn.Hooking
                     (MethodPointer, MethodType) = (method, MethodType.ThresholdCounterStub);
                     return;
                 }
+
+
 
                 (MethodPointer, MethodType) = (method, MethodType.DirectNativeStub);
                 return;

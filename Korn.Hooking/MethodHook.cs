@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using static Korn.Hooking.MethodAllocator;
 
 namespace Korn.Hooking
 {
@@ -11,27 +12,23 @@ namespace Korn.Hooking
 
         MethodHook(MethodInfoSummary targetMethod)
         {
-            TargetMethod = targetMethod;
+            this.targetMethod = targetMethod;
 
-            TargetStatement = new MethodStatement(targetMethod);
-            TargetStatement.EnsureMethodIsCompiled();
-
+            stub = new Stub(this);
             ActiveHooks.Add(this);
         }
 
-        public readonly MethodStatement TargetStatement;
-        public readonly MethodInfo TargetMethod;
+        Stub stub;
+        MethodInfo targetMethod;
+        
+        List<HookEntry> hooks = new List<HookEntry>();
 
-        public MethodStatement StubStatement { get; private set; }
-        public MethodInfo StubMethod { get; private set; }
-
-        public readonly List<MethodInfo> Hooks = new List<MethodInfo>();
         public bool IsEnabled { get; private set; }
 
         void VerifySignature(MethodInfo method)
         {
             var methodParameters = MethodInfoUtils.GetParameters(method);
-            var targetParameters = MethodInfoUtils.GetParameters(TargetMethod);
+            var targetParameters = MethodInfoUtils.GetParameters(targetMethod);
 
             string message = null;
 
@@ -48,8 +45,8 @@ namespace Korn.Hooking
             }
 
             var exprectedArgumentTypes = targetParameters.ToList();
-            if (TargetMethod.ReturnType != typeof(void))
-                exprectedArgumentTypes.Add(TargetMethod.ReturnType);
+            if (targetMethod.ReturnType != typeof(void))
+                exprectedArgumentTypes.Add(targetMethod.ReturnType);
 
             if (method.GetParameters().Length != exprectedArgumentTypes.Count)
             {
@@ -84,48 +81,57 @@ namespace Korn.Hooking
 
             string GenerateSignature()
             {
-                var types = TargetMethod.GetParameters().Select(param => param.ParameterType).ToList();
-                if (TargetMethod.ReturnType != typeof(void))
-                    types.Add(TargetMethod.ReturnType);
+                var types = targetMethod.GetParameters().Select(param => param.ParameterType).ToList();
+                if (targetMethod.ReturnType != typeof(void))
+                    types.Add(targetMethod.ReturnType);
 
                 return $"bool HookImplementation({string.Join(" ", types.Select(t => $"ref {t.Name}"))})";
             }
         }
 
         public MethodHook AddHook(Delegate hookDelegate) => AddHook(hookDelegate.Method);
-        public MethodHook AddHook(MethodInfoSummary hook)
+
+        public MethodHook AddHook(MethodInfoSummary method)
         {
-            VerifySignature(hook);
+            VerifySignature(method);
 
-            var isEnabled = IsEnabled;
-            if (isEnabled)
-                Disable();
+            var methodStatement = new MethodStatement(method.Method);
+            methodStatement.EnsureMethodIsCompiled();
 
-            Hooks.Add(hook);
-            BuildStub();
+            //var hook = new HookEntry(this, methodStatement, );
+            //return AddHook(hook);
+            return null;
+        }
 
-            if (isEnabled)
-                Enable();
+        public MethodHook AddHook(HookEntry hook)
+        {
+            hooks.Add(hook);
+            //BuildStub();
 
             return this;
         }
 
         public MethodHook RemoveHook(Delegate hookDelegate) => RemoveHook(hookDelegate.Method);
-        public MethodHook RemoveHook(MethodInfoSummary hook)
+        public MethodHook RemoveHook(MethodInfoSummary method)
         {
-            var isRemoved = Hooks.Remove(hook);
+            //var isRemoved = hooks.Remove(method);
 
-            if (isRemoved)
-            {
-                var isEnabled = IsEnabled;
-                if (isEnabled)
-                    Disable();
+            //if (isRemoved)
+            //{
+            //    BuildStub();
+            //}
 
-                BuildStub();
+            return this;
+        }
 
-                if (isEnabled)
-                    Enable();
-            }
+        public MethodHook RemoveHook(HookEntry hook)
+        {
+            //var isRemoved = hooks.Remove(method);
+
+            //if (isRemoved)
+            //{
+            //    BuildStub();
+            //}
 
             return this;
         }
@@ -148,19 +154,51 @@ namespace Korn.Hooking
             //*TargetStatement.Target = TargetStatement.TargetSnapshoot;
         }
 
-        void BuildStub()
-        {
-            //StubMethod = MultiHookMethodGenerator.Generate(this, TargetMethod, Hooks);
-            StubStatement = new MethodStatement(StubMethod);
-        }
-
         public static MethodHook Create(Delegate targetMethodDelegate) => Create(targetMethodDelegate.Method);
         public static MethodHook Create(MethodInfoSummary targetMethod)
         {
-            var existsHook = ActiveHooks.FirstOrDefault(hook => hook.TargetMethod == targetMethod.Method);
+            var existsHook = ActiveHooks.FirstOrDefault(hook => hook.targetMethod == targetMethod.Method);
             if (existsHook != null)
                 return existsHook;
             return new MethodHook(targetMethod);
+        }
+
+        public class Stub
+        {
+            public Stub(MethodHook owner)
+            {
+                Owner = owner;
+
+                targetStatement = new MethodStatement(owner.targetMethod);
+                targetStatement.EnsureMethodIsCompiled();
+
+                hooksArray = MethodAllocator.Instance.CreateLinkedArray();
+            }
+
+            public MethodHook Owner { get; private set; }
+
+            MethodStatement targetStatement;
+            LinkedArray hooksArray;
+            List<Indirect> indirects;
+            Indirect stubIndirect;
+            Routine stubRoutine;
+        }
+
+        public class HookEntry
+        {
+            public HookEntry(
+                MethodHook owner, 
+                MethodStatement methodStatement, 
+                LinkedArray.Node* memoryNode)
+            {
+                HookOwner = owner;
+                MethodStatement = methodStatement;
+                MemoryNode = memoryNode;
+            }
+
+            public MethodHook HookOwner { get; private set; }
+            public MethodStatement MethodStatement { get; private set; }
+            public LinkedArray.Node* MemoryNode { get; private set; }
         }
     }
 }

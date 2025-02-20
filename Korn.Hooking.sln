@@ -17,6 +17,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Korn.Shared.Internal", "..\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Korn.Utils.Memory", "..\Korn.Utils.Memory\Korn.Utils.Memory\Korn.Utils.Memory.csproj", "{B227EE24-46AA-4663-9B8B-B099BA96BF43}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Korn.Utils.Assembler", "..\Korn.Utils.Assembler\Korn.Utils.Assembler\Korn.Utils.Assembler.csproj", "{3795B278-3BFA-41EC-B959-06832D18DD17}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -32,8 +34,10 @@ Global
 		{D5AC302B-3B1B-46E0-8D3B-A4CA9C48D842}.Debug|x64.Build.0 = Debug|x64
 		{A174313E-1A14-4AC8-8761-5F957D6127CF}.Debug|x64.ActiveCfg = Debug|x64
 		{A174313E-1A14-4AC8-8761-5F957D6127CF}.Debug|x64.Build.0 = Debug|x64
-		{B227EE24-46AA-4663-9B8B-B099BA96BF43}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{B227EE24-46AA-4663-9B8B-B099BA96BF43}.Debug|x64.Build.0 = Debug|Any CPU
+		{B227EE24-46AA-4663-9B8B-B099BA96BF43}.Debug|x64.ActiveCfg = Debug|x64
+		{B227EE24-46AA-4663-9B8B-B099BA96BF43}.Debug|x64.Build.0 = Debug|x64
+		{3795B278-3BFA-41EC-B959-06832D18DD17}.Debug|x64.ActiveCfg = Debug|x64
+		{3795B278-3BFA-41EC-B959-06832D18DD17}.Debug|x64.Build.0 = Debug|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -44,5 +48,6 @@ Global
 		{D5AC302B-3B1B-46E0-8D3B-A4CA9C48D842} = {F136C36C-BA80-405F-83F5-F42F2227D6AA}
 		{A174313E-1A14-4AC8-8761-5F957D6127CF} = {F136C36C-BA80-405F-83F5-F42F2227D6AA}
 		{B227EE24-46AA-4663-9B8B-B099BA96BF43} = {F136C36C-BA80-405F-83F5-F42F2227D6AA}
+		{3795B278-3BFA-41EC-B959-06832D18DD17} = {F136C36C-BA80-405F-83F5-F42F2227D6AA}
 	EndGlobalSection
 EndGlobal
