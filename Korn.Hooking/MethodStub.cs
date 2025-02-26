@@ -93,120 +93,100 @@ namespace Korn.Hooking
 
         /*
          * 
+         * rbx - temp register
          * r10 - hook address
          * r11 - reserved rcx
          * r12 - reserved rdx
          * r13 - reserved r8
          * r14 - reserved r9
-         * rbx - temp register
          * 
         */
         void WriteRoutineCode(byte** pointer_code)
         {
             var arguments = methodInfo.GetParameters();
             var hasReturnValue = methodInfo.ReturnType != typeof(void);
-            var has1thArgument = arguments.Length > 0;
-            var has2thArgument = arguments.Length > 1;
-            var has3thArgument = arguments.Length > 2;
-            var has4thArgument = arguments.Length > 3;
+            var argumentsCount = arguments.Length;
+            var paramsCount = argumentsCount + (hasReturnValue ? 1 : 0);
 
             var epilogueAddress = IntPtr.Zero;
 
             var maxStack = CalculateMaxStack() + 0x20;
-            var stackPointer = maxStack;
 
             var entryPoint = (IntPtr)(*pointer_code);
             var asm = (Assembler*)pointer_code;
+            var stackPointer = maxStack;
 
             // prologue
             asm
-            ->PushRbp()
             ->PushRbx()
             ->SubRsp32(maxStack)
             ->MovR1064(hooksArray.RootNode);
+
+            if (argumentsCount > 0)
+                asm->MovRspPtrOff32Rcx(stackPointer -= 8);
+
+            if (argumentsCount > 1)
+                asm->MovRspPtrOff32Rdx(stackPointer -= 8);
+
+            if (argumentsCount > 2)
+                asm->MovRspPtrOff32R8(stackPointer -= 8);
+
+            if (argumentsCount > 3)
+                asm->MovRspPtrOff32R9(stackPointer -= 8);
+
+            stackPointer = maxStack;
 
             // entry
             var func_getNode = asm->GetCurrentAddress();
             asm->MovRaxR10Ptr();
 
             // calling hook
-            asm->PushR10();
+            asm
+            ->PushR10()
+            ->PushR11()
+            ->PushR12()
+            ->PushR13()
+            ->PushR14()
+            ->PushR15();
 
-            if (has1thArgument)
-                asm->PushR11();
-
-            if (has2thArgument)
-                asm->PushR12();
-
-            if (has3thArgument)
-                asm->PushR13();
-
-            if (has4thArgument)
-                asm->PushR14();
-
-            if (hasReturnValue)
-                asm->PushR15();
-
-            if (has1thArgument)
-            {
+            if (paramsCount > 0)
                 asm
-                ->MovRspPtrOff32Rcx(stackPointer -= 8)
                 ->MovRcxRsp()
-                ->AddRcx32(stackPointer);
-            }
+                ->AddRcx32(stackPointer -= 8);
 
-            if (has2thArgument)
-            {
+            if (paramsCount > 1)
                 asm
-                ->MovRspPtrOff32Rdx(stackPointer -= 8)
                 ->MovRdxRsp()
-                ->AddRdx32(stackPointer);
-            }
+                ->AddRdx32(stackPointer -= 8);
 
-            if (has3thArgument)
-            {
+            if (paramsCount > 2)
                 asm
-                ->MovRspPtrOff32R8(stackPointer -= 8)
                 ->MovR8Rsp()
-                ->AddR832(stackPointer);
-            }
+                ->AddR832(stackPointer -= 8);
 
-            if (has4thArgument)
-            {
+            if (paramsCount > 3)
                 asm
-                ->MovRspPtrOff32R9(stackPointer -= 8)
                 ->MovR9Rsp()
-                ->AddR932(stackPointer);
-            }
+                ->AddR932(stackPointer -= 8);
 
             var stackForCall = 0;
-            for (var i = 3; i < arguments.Length; i++)
+            for (var i = 3; i < paramsCount; i++)
             {
                 asm
                 ->MovRbpRsp()
-                ->AddRbp32(arguments.Length * 8 - stackForCall)
+                ->AddRbp32(paramsCount * 8 - stackForCall)
                 ->MovRspPtrOff32Rbp(stackForCall += 8);
                 stackPointer -= 8;
             }
 
-            asm->CallRax();
-
-            asm->PopR10();
-
-            if (hasReturnValue)
-                asm->PopR15();
-
-            if (has4thArgument)
-                asm->PopR14();
-
-            if (has3thArgument)
-                asm->PopR13();
-
-            if (has2thArgument)
-                asm->PopR12();
-
-            if (has1thArgument)
-                asm->PopR11();
+            asm
+            ->CallRax()
+            ->PopR15()
+            ->PopR14()
+            ->PopR13()
+            ->PopR12()
+            ->PopR11()
+            ->PopR10();
 
             // checking calling result
             asm
@@ -222,32 +202,29 @@ namespace Korn.Hooking
 
             // call original method
             stackPointer += arguments.Length * 8;
-            if (has1thArgument)
+            if (argumentsCount > 0)
                 asm->MovRcxPspPtrOff32(stackPointer -= 8);
-
-            if (has2thArgument)
+            if (argumentsCount > 1)
                 asm->MovRdxPspPtrOff32(stackPointer -= 8);
-
-            if (has3thArgument)
+            if (argumentsCount > 2)
                 asm->MovR8PspPtrOff32(stackPointer -= 8);
-
-            if (has4thArgument)
+            if (argumentsCount > 3)
                 asm->MovR9PspPtrOff32(stackPointer -= 8);
 
             stackForCall = 0;
-            for (var i = 3; i < arguments.Length; i++)
+            for (var i = 3; i < argumentsCount; i++)
             {
                 asm
                 ->MovRbpRsp()
-                ->AddRbp32((arguments.Length - i) * 8)
+                ->AddRbp32((argumentsCount - i) * 8)
                 ->MovRspPtrOff32Rbp(stackForCall += 8);
                 stackPointer -= 8;
             }
 
             //var shouldFixStack = maxStack % 16 != 0;
-            asm->SubRsp8(8);
+            //asm->SubRsp8(8);
             asm->CallRel32(entryPoint - routineStubOffset);
-            asm->AddRsp8(8);
+            //asm->AddRsp8(8);
 
             // epilogue
             epilogueAddress = asm->GetCurrentAddress();
@@ -257,17 +234,15 @@ namespace Korn.Hooking
 
             asm
             ->PopRbx()
-            ->PopRbp()
             ->Ret();
 
             int CalculateMaxStack()
             {
-                var registersReserves = Math.Min(arguments.Length, 4);
                 var registers = 1;
                 var returnAddress = 1;
                 var addictional = hasReturnValue ? 1 : 0;
-                var callStack = registersReserves + arguments.Length > 4 ? ((arguments.Length - 4) * 2) : 0;
-                return (registersReserves + registers + returnAddress + addictional + callStack) * 8;
+                var callStack = 4 + paramsCount > 4 ? ((paramsCount - 4) * 2) : 0;
+                return (((registers + returnAddress + addictional + callStack) + 1) / 2 * 2 + 1) * 8;
             }
         }
 
@@ -276,6 +251,39 @@ namespace Korn.Hooking
             var method = methodStatement.MethodPointer;
             var asm = (Assembler*)&method;
             asm->JmpRel32Ptr(indirect.Address);
+        }
+
+        class Stack
+        {
+            public Stack(MethodInfo method)
+            {
+                HasReturnType = method.ReturnType != typeof(void);
+                ArgumentsCount = method.GetParameters().Length;
+                ParamsCount = ArgumentsCount + (HasReturnType ? 1 : 0);
+                MaxStack = CalculateMaxStack();
+            }
+
+            public readonly bool HasReturnType;
+            public readonly int ArgumentsCount;
+            public readonly int ParamsCount;
+            public readonly int MaxStack;
+
+            int CalculateMaxStack()
+            {
+                return (ParamsCount * 2) + 0x20;
+            }
+        }
+        
+        struct StackEntry
+        {
+
+            public class Factory
+            {
+                public Factory(int maxStack)
+                {
+
+                }
+            }
         }
     }
 }
