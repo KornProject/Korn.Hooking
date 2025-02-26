@@ -14,11 +14,11 @@ namespace Korn.Hooking
         {
             this.targetMethod = targetMethod;
 
-            stub = new Stub(this);
+            stub = new MethodStub(targetMethod);
             ActiveHooks.Add(this);
         }
 
-        Stub stub;
+        MethodStub stub;
         MethodInfo targetMethod;
         
         List<HookEntry> hooks = new List<HookEntry>();
@@ -98,15 +98,12 @@ namespace Korn.Hooking
             var methodStatement = new MethodStatement(method.Method);
             methodStatement.EnsureMethodIsCompiled();
 
-            //var hook = new HookEntry(this, methodStatement, );
-            //return AddHook(hook);
-            return null;
-        }
-
-        public MethodHook AddHook(HookEntry hook)
-        {
+            var memoryNode = stub.AddHook(methodStatement.MethodPointer);
+            var hook = new HookEntry(this, methodStatement, memoryNode);
             hooks.Add(hook);
-            //BuildStub();
+
+            if (hooks.Count == 1 && IsEnabled)
+                stub.EnableRedirection();
 
             return this;
         }
@@ -114,24 +111,17 @@ namespace Korn.Hooking
         public MethodHook RemoveHook(Delegate hookDelegate) => RemoveHook(hookDelegate.Method);
         public MethodHook RemoveHook(MethodInfoSummary method)
         {
-            //var isRemoved = hooks.Remove(method);
+            var hook = hooks.Find(h => h.MethodStatement.MethodInfo == method.Method);
 
-            //if (isRemoved)
-            //{
-            //    BuildStub();
-            //}
+            if (hook != null)
+            {
+                if (hooks.Count == 1)
+                    stub.DisableRedirection();
 
-            return this;
-        }
+                stub.RemoveHook(hook.MemoryNode);
+                hooks.Remove(hook);
+            }
 
-        public MethodHook RemoveHook(HookEntry hook)
-        {
-            //var isRemoved = hooks.Remove(method);
-
-            //if (isRemoved)
-            //{
-            //    BuildStub();
-            //}
 
             return this;
         }
@@ -141,8 +131,7 @@ namespace Korn.Hooking
             if (IsEnabled)
                 return;
             IsEnabled = true;
-
-            //*TargetStatement.Target = StubSnapshoot.TargetSnapshoot;
+            stub.EnableRedirection();
         }
 
         public void Disable()
@@ -150,8 +139,7 @@ namespace Korn.Hooking
             if (!IsEnabled)
                 return;
             IsEnabled = false;
-
-            //*TargetStatement.Target = TargetStatement.TargetSnapshoot;
+            stub.DisableRedirection();
         }
 
         public static MethodHook Create(Delegate targetMethodDelegate) => Create(targetMethodDelegate.Method);
@@ -161,27 +149,6 @@ namespace Korn.Hooking
             if (existsHook != null)
                 return existsHook;
             return new MethodHook(targetMethod);
-        }
-
-        public class Stub
-        {
-            public Stub(MethodHook owner)
-            {
-                Owner = owner;
-
-                targetStatement = new MethodStatement(owner.targetMethod);
-                targetStatement.EnsureMethodIsCompiled();
-
-                hooksArray = MethodAllocator.Instance.CreateLinkedArray();
-            }
-
-            public MethodHook Owner { get; private set; }
-
-            MethodStatement targetStatement;
-            LinkedArray hooksArray;
-            List<Indirect> indirects;
-            Indirect stubIndirect;
-            Routine stubRoutine;
         }
 
         public class HookEntry

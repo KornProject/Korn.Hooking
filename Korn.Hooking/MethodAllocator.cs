@@ -53,7 +53,14 @@ namespace Korn.Hooking
         public Routine CreateRoutine(byte* routineBytesPointer, int routineBytesCount) 
             => routineRegionAllocator.CreateRoutine(routineBytesPointer, routineBytesCount);
 
-        public LinkedArray CreateLinkedArray() => CreateLinkedArray((IntPtr)1);
+        public AllocatedRoutine CreateAllocatedRoutine(int initialSize)
+        {
+            var routine = routineRegionAllocator.CreateRoutine(initialSize);
+            var allocatedRoutine = AllocatedRoutine.From(routine);
+            return allocatedRoutine;
+        }
+
+        public LinkedArray CreateLinkedArray() => CreateLinkedArray(LinkedArray.DEFAULT_NODE_VALUE);
 
         public LinkedArray CreateLinkedArray(IntPtr startValue)
         {
@@ -431,6 +438,8 @@ namespace Korn.Hooking
         // when using linked array it must have at least 1 node, otherwise its work is considered invalid
         public class LinkedArray : IDisposable
         {
+            public static readonly IntPtr DEFAULT_NODE_VALUE = (IntPtr)1;
+
             public LinkedArray(Region.Allocator alloctor, Node* rootNode)
             {
                 this.alloctor = alloctor;
@@ -442,25 +451,50 @@ namespace Korn.Hooking
             public Node* RootNode;
             public Node* LastNode;
 
-            public void AddNode(IntPtr address)
+            public Node* AddNode(IntPtr address)
             {
-                if (RootNode->Value == (IntPtr)1)
+                if (RootNode->Value == DEFAULT_NODE_VALUE)
                 {
                     RootNode->Value = address;
-                    return;
+                    return RootNode;
                 }
 
                 var node = alloctor.AllocateNode(address);
                 LastNode = LastNode->Next = node;
+                return node;
             }
 
             public void RemoveNode(Node* node)
             {
                 if (RootNode == node)
+                {                    
+                    if (RootNode->Next->IsValid)
+                    {
+                        var removedNode = RootNode;
+                        RootNode = RootNode->Next;
+                        removedNode->DestroyNode();
+                    }
+                    else
+                    {
+                        RootNode->Value = DEFAULT_NODE_VALUE;
+                    }
+                }
+                else
                 {
-                    var removedNode = RootNode;
-                    RootNode = node->Next;
-                    removedNode->DestroyNode();
+                    var previousNode = RootNode;
+                    var currentNode = RootNode;
+                    do
+                    {
+                        currentNode = currentNode->Next;
+                        if (currentNode == node)
+                        {
+                            previousNode->Next = currentNode->Next;
+                            currentNode->DestroyNode();
+                            break;
+                        }
+                        previousNode = currentNode;
+                    }
+                    while (currentNode->IsValid);
                 }
             }
 
@@ -528,7 +562,7 @@ namespace Korn.Hooking
                         if (!HasSpace)
                             throw new KornException(
                                 "Korn.Hooking.MethodAllocator.LinkedArraysRegion->AllocateNode",
-                                "Bad check for free indirect slots. There are no free slots in this region"
+                                "Bad check for free node slots. There are no free slots in this region"
                             );
 
                         var node = FindFreeNode();
@@ -546,10 +580,11 @@ namespace Korn.Hooking
                     for (var i = 0; i < count; i++)
                         if (!pointer->IsValid)
                             return pointer;
+                        else pointer++;
 
                     throw new KornException(
                         "Korn.Hooking.MethodAllocator.LinkedArraysRegion->AllocateNode",
-                        "Bad check for free indirect slots. There are no free slots in this region"
+                        "Bad check for free indirect node. There are no free slots in this region"
                     );
                 }
 
@@ -573,6 +608,7 @@ namespace Korn.Hooking
                         var node = region.AllocateNode(startValue);
 
                         var array = new LinkedArray(this, node);
+                        arrays.Add(array);
                         return array;
                     }
 
@@ -610,6 +646,35 @@ namespace Korn.Hooking
             }
         }
 
+        public class AllocatedRoutine : Routine
+        {
+            public AllocatedRoutine(Region routinesRegion, int regionOffset, IntPtr address, int size)
+                : base(routinesRegion, regionOffset, address, size) { }
+
+            // to prevent GC clear original routine
+            Routine originalRoutine;
+
+            public bool IsSizeFixed { get; private set; }
+
+            public void FixSize(int size)
+            {
+                if (IsSizeFixed)
+                    throw new KornException(
+                        "Korn.Hooking.MethodAllocator.AllocatedRoutine->FixSize: ",
+                        "Routine size already fixed"
+                    );
+
+                IsSizeFixed = true;
+
+                Size = size;
+            }
+
+            public static AllocatedRoutine From(Routine routine) => new AllocatedRoutine(routine.RoutinesRegion, routine.RegionOffset, routine.Address, routine.Size)
+            {
+                originalRoutine = routine
+            };
+        }
+
         public unsafe class Routine : IDisposable
         {
             public Routine(Region routinesRegion, int regionOffset, IntPtr address, int size)
@@ -618,7 +683,7 @@ namespace Korn.Hooking
             public Region RoutinesRegion { get; private set; }
             public int RegionOffset { get; private set; }
             public IntPtr Address { get; private set; }
-            public int Size { get; private set; }
+            public int Size { get; protected private set; }
 
             bool disposed;
             public void Dispose()
@@ -640,6 +705,7 @@ namespace Korn.Hooking
 
                 public Routine AddRoutine(byte[] routineBytes)
                     => AddRoutine(GetOffsetForInsertRoutine(routineBytes.Length), routineBytes);
+
                 public Routine AddRoutine(int offset, byte[] routineBytes)
                 {
                     fixed (byte* routineBytesPointer = routineBytes)
@@ -648,12 +714,24 @@ namespace Korn.Hooking
 
                 public Routine AddRoutine(byte* routineBytes, int routinLength)
                     => AddRoutine(GetOffsetForInsertRoutine(routinLength), routineBytes, routinLength);
-                public Routine AddRoutine(int offset, byte* routineBytes, int routinLength)
+
+                public Routine AddRoutine(int offset, byte* routineBytes, int routineLength)
                 {
                     var address = AllocatedMemory.Address + offset;
-                    Buffer.MemoryCopy(routineBytes, (byte*)address, routinLength, routinLength);
+                    Buffer.MemoryCopy(routineBytes, (byte*)address, routineLength, routineLength);
 
-                    var routine = new Routine(this, offset, address, routinLength);
+                    var routine = new Routine(this, offset, address, routineLength);
+                    AddRoutine(routine);
+                    return routine;
+                }
+
+                public Routine AddRoutine(int routinLength)
+                    => AddRoutine(GetOffsetForInsertRoutine(routinLength), routinLength);
+
+                public Routine AddRoutine(int offset, int routineLength)
+                {
+                    var address = AllocatedMemory.Address + offset;
+                    var routine = new Routine(this, offset, address, routineLength);
                     AddRoutine(routine);
                     return routine;
                 }
@@ -729,6 +807,12 @@ namespace Korn.Hooking
                     {
                         var region = GetRoutinesRegion(routineSize);
                         return region.AddRoutine(routineBytes, routineSize);
+                    }
+
+                    public Routine CreateRoutine(int size)
+                    {
+                        var region = GetRoutinesRegion(size);
+                        return region.AddRoutine(size);
                     }
 
                     Region GetRoutinesRegion(int requestedSize)
