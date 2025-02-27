@@ -1,12 +1,8 @@
 ﻿using System.Collections.Generic;
 using Korn.Utils.Assembler;
 using System.Reflection;
-using System.Linq;
 using System;
 using static Korn.Hooking.MethodAllocator;
-using System.Text.RegularExpressions;
-using System.Runtime;
-using System.Threading;
 
 namespace Korn.Hooking
 {
@@ -343,7 +339,7 @@ namespace Korn.Hooking
 
             int CalculateMaxStack()
             {
-                var value = (ParamsCount * 2) + ClrRoutineStackOffset;
+                var value = (ParamsCount * 2 * 0x08) + (ParamsCount > 4 ? ((ParamsCount - 4) * 2 * 0x08) : 0) + ClrRoutineStackOffset;
                 if ((value + InitialPrevStackOffset) % 0x10 == 0)
                     value += 0x08;
                 return value;
@@ -351,7 +347,7 @@ namespace Korn.Hooking
 
             public int GetOffsetForPrevStack(int index) => InitialPrevStackOffset - MaxStack - index * 0x08 - 0x08/*call return address*/;
             public int GetOffsetForStartStack(int index) => ClrRoutineStackOffset + index * 0x08;
-            public int GetOffsetForEndStack(int index) => MaxStack - index * 0x08;
+            public int GetOffsetForEndStack(int index) => MaxStack - index * 0x08 - 0x08;
 
             public MethodStack BuildMethodStack() => new MethodStack(this);
 
@@ -435,45 +431,3 @@ namespace Korn.Hooking
         }       
     }
 }
-
-/*
- 
-
-        public struct Nada
-        {
-            public IntPtr Value;
-            public Nada* Next;
-        }
-
-        static Nada* nodes;
-
-        string A(int a, string b)
-        {
-            return null;
-        }
-
-        static bool B(ref object self, ref int a, ref string b, ref string result)
-        {
-            Console.WriteLine("" + self + a + b + result);
-            return false;
-        }
-
-        static string C(object self, int a, string b)
-        {
-            var node = nodes;
-            string result = null;
-
-            do
-            {
-                var address = node->Value;
-                var value = ((delegate* unmanaged<ref object, ref int, ref string, ref string, bool>)address)(ref self, ref a, ref b, ref result);
-                if (!value)
-                    return result;
-
-                node = node->Next;
-            }
-            while (node->Next != null);
-
-            return ((MethodStub)self).A(a, b);
-        }
-*/
