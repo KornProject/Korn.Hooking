@@ -109,33 +109,26 @@ namespace Korn.Hooking
 
         public class CaveFinder
         {
-            List<MemoryRegion.Caved> regions = new List<MemoryRegion.Caved>();
+            const int MinCaveFreeSize = 0x10;
 
-            public MemoryRegion.Caved GetFreeCaveNear(IntPtr address, out bool isNewCave)
-            {
-                var regions = this.regions.Count();
-                var cave = GetFreeCaveNear(address);
-                isNewCave = this.regions.Count() != regions;
-                return cave;
-            }
+            List<MemoryRegion.Caved> caves = new List<MemoryRegion.Caved>();
 
             public MemoryRegion.Caved GetFreeCaveNear(IntPtr address)
             {
-                foreach (var cave in regions)
-                    if (cave.IsNearTo(address))
-                        if (!cave.IsNoSpace)
-                            return cave;
-
                 return FindMemoryCave(address);
             }
 
-            public MemoryRegion.Caved FindMemoryCave(IntPtr address)
+            MemoryRegion.Caved FindMemoryCave(IntPtr address)
             {
                 var mbi = MemoryAllocator.Query(address);
 
                 MemoryRegion.Caved freeCave;
-                do freeCave = FindFreeCaveNear(address, & mbi);
-                while (freeCave.IsNoSpace);
+                do
+                {
+                    freeCave = FindFreeCaveNear(address, &mbi);
+                    caves.Add(freeCave);
+                }
+                while (freeCave.Size < MinCaveFreeSize);
 
                 return freeCave;
             }
@@ -219,7 +212,7 @@ namespace Korn.Hooking
 
             bool IsCaveFound(MemoryBaseInfo* mbi)
             {
-                foreach (var blob in regions)
+                foreach (var blob in caves)
                     if (blob.RegionBase == mbi->BaseAddress)
                         return true;
                 return false;
@@ -296,38 +289,36 @@ namespace Korn.Hooking
                         this.region = region;
 
                         var bytes = region.MemoryRegion.Size;
-                        var statuses = bytes / sizeof(long);
-                        var longs = (statuses + 63) / 64;
-                        AllocateLongs(longs);
+                        statusesCount = bytes / sizeof(long);
+                        longsCount = (statusesCount + 63) / 64;
+                        longs = MemoryEx.Alloc<long>(longsCount);
 
-                        this.statuses = statuses;
+                        UpdateNoSpaceState();
                     }
 
-                    int statuses;
+                    int statusesCount;
                     Region region;
-                    long[] longs;
-                    GCHandle longsHandle;
-                    long* longsPointer;
+                    int longsCount;
+                    long* longs;
 
                     public StatusEnum this[int index]
                     {
-                        get => (StatusEnum)(longsPointer[index / 64] & (1L << (index % 64)));
-                        set => longsPointer[index / 64] =
+                        get => (longs[index / 64] & (1L << (index % 64))) == 0 ? StatusEnum.Free : StatusEnum.Reserved;
+                        set => longs[index / 64] =
                            value == StatusEnum.Free
-                           ? (longsPointer[index / 64] & ~(1L << (index % 64)))
-                           : (longsPointer[index / 64] | (1L << (index % 64)));
+                           ? (longs[index / 64] & ~(1L << (index % 64)))
+                           : (longs[index / 64] | (1L << (index % 64)));
                     }
 
                     public StatusEnum GetStatusByAddress(IntPtr address) => this[(int)((long)address - (long)region.MemoryRegion.Address) / sizeof(IntPtr)];
                     public IntPtr GetAddressByIndex(int index) => region.MemoryRegion.Address + index * sizeof(IntPtr);
 
-                    public bool HasFreeStatusSlot => GetFreeStatusIndex() != -1;
+                    public bool HasFreeStatusSlot;
 
                     public Indirect CreateIndirect(int index)
                     {
                         var address = GetAddressByIndex(index);
-                        var indirect = new Indirect(region, address);
-                        indirect.IndirectIndex = index;
+                        var indirect = new Indirect(region, address) { IndirectIndex = index };
                         this[index] = StatusEnum.Reserved;
 
                         UpdateNoSpaceState();
@@ -343,16 +334,15 @@ namespace Korn.Hooking
                         UpdateNoSpaceState(false);
                     }
 
-                    void UpdateNoSpaceState() => UpdateNoSpaceState(HasFreeStatusSlot);
+                    void UpdateNoSpaceState() => UpdateNoSpaceState(GetFreeStatusIndex() == -1);
                     void UpdateNoSpaceState(bool noSpace)
                     {
-                        if (region.MemoryRegion is MemoryRegion.Caved cavedMemoryRegion)
-                            cavedMemoryRegion.IsNoSpace = noSpace;
+                        HasFreeStatusSlot = !noSpace;
                     }
 
                     public int GetFreeStatusIndex()
                     {
-                        for (var hi = 0; hi < statuses / 64; hi++)
+                        for (var hi = 0; hi < statusesCount / 64; hi++)
                             if (longs[hi] != 1 << 64)
                                 for (var li = 0; li < 64; li++)
                                 {
@@ -361,26 +351,19 @@ namespace Korn.Hooking
                                         return index;
                                 }
 
-                        for (var index = statuses / 64 * 64; index < statuses; index++)
+                        for (var index = statusesCount / 64 * 64; index < statusesCount; index++)
                             if (this[index] == StatusEnum.Free)
                                 return index;
 
                         return -1;
                     }
 
-                    void AllocateLongs(int longsCount)
-                    {
-                        longs = new long[longsCount];
-                        longsHandle = GCHandle.Alloc(longsCount, GCHandleType.Pinned);
-                        longsPointer = (long*)longsHandle.AddrOfPinnedObject();
-                    }
-
-                    public void Dispose() => longsHandle.Free();
+                    public void Dispose() => MemoryEx.Free(longs);
 
                     public enum StatusEnum : byte
                     {
                         Free = 0,
-                        Reserved = 1
+                        Reserved = 1 // or any other state
                     }
                 }
 
@@ -405,20 +388,24 @@ namespace Korn.Hooking
 
                     Region GetIndirectsRegion(IntPtr nearTo)
                     {
-                        foreach (var region in regions)
+                        while (true)
                         {
-                            if (region.MemoryRegion.IsNearTo(nearTo))
-                                if (region.HasFreeIndirectSlot)
-                                    return region;
-                        }
+                            foreach (var region in regions)
+                            {
+                                if (region.MemoryRegion.IsNearTo(nearTo))
+                                    if (region.HasFreeIndirectSlot)
+                                        return region;
+                            }
 
-                        return CreateIndirectRegion(nearTo);
+                            CreateIndirectRegion(nearTo);
+                        }
                     }
 
                     Region CreateIndirectRegion(IntPtr nearTo)
                     {
                         var memoryRegion = FindMemoryRegion();
                         var region = new Region(memoryRegion);
+                        regions.Add(region);
                         return region;
 
                         MemoryRegion FindMemoryRegion()
@@ -427,7 +414,7 @@ namespace Korn.Hooking
                             if (allocatedRegion != null)
                                 return allocatedRegion;
 
-                            var caveRegion = caveFinder.FindMemoryCave(nearTo);
+                            var caveRegion = caveFinder.GetFreeCaveNear(nearTo);
                             return caveRegion;
                         }
                     }
@@ -692,7 +679,7 @@ namespace Korn.Hooking
                     return;
                 disposed = true;
 
-                Utils.Memory.MemoryExtensions.Zero(Address, Size);
+                Utils.Memory.MemoryEx.Zero(Address, Size);
                 RoutinesRegion.RemoveRoutine(this);
             }
 
@@ -848,8 +835,6 @@ namespace Korn.Hooking
             public class Caved : MemoryRegion
             {
                 public readonly IntPtr RegionBase;
-
-                public bool IsNoSpace;
 
                 public Caved(IntPtr regionBase, IntPtr address, int size) : base(address, size)
                     => RegionBase = regionBase;

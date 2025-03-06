@@ -1,8 +1,8 @@
-﻿using System;
+﻿using static Korn.Hooking.MethodAllocator;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
-using static Korn.Hooking.MethodAllocator;
+using System.Linq;
+using System;
 
 namespace Korn.Hooking
 {
@@ -18,10 +18,12 @@ namespace Korn.Hooking
             ActiveHooks.Add(this);
         }
 
+        public MethodStub DEBUG_Stub => stub;
+
         MethodStub stub;
         MethodInfo targetMethod;
         
-        List<HookEntry> hooks = new List<HookEntry>();
+        List<HookEntry> entries = new List<HookEntry>();
 
         public bool IsEnabled { get; private set; }
 
@@ -89,57 +91,68 @@ namespace Korn.Hooking
             }
         }
 
-        public MethodHook AddHook(Delegate hookDelegate) => AddHook(hookDelegate.Method);
-
-        public MethodHook AddHook(MethodInfoSummary method)
+        public MethodHook AddEntry(Delegate hookDelegate) => AddEntry(hookDelegate.Method);
+        public MethodHook AddEntry(MethodInfoSummary method) => AddEntry(method.Method);
+        public MethodHook AddEntry(MethodInfo method)
         {
             VerifySignature(method);
 
-            var methodStatement = new MethodStatement(method.Method);
+            var methodStatement = new MethodStatement(method);
             methodStatement.EnsureMethodIsCompiled();
 
             var memoryNode = stub.AddHook(methodStatement.MethodPointer);
             var hook = new HookEntry(this, methodStatement, memoryNode);
-            hooks.Add(hook);
+            entries.Add(hook);
 
-            if (hooks.Count == 1 && IsEnabled)
+            if (entries.Count == 1 && IsEnabled)
                 stub.EnableRedirection();
 
             return this;
         }
 
-        public MethodHook RemoveHook(Delegate hookDelegate) => RemoveHook(hookDelegate.Method);
-        public MethodHook RemoveHook(MethodInfoSummary method)
+        public MethodHook RemoveEntry(Delegate hookDelegate) => RemoveEntry(hookDelegate.Method);
+        public MethodHook RemoveEntry(MethodInfoSummary method) => RemoveEntry(method.Method);
+        public MethodHook RemoveEntry(MethodInfo method)
         {
-            var hook = hooks.Find(h => h.MethodStatement.MethodInfo == method.Method);
+            var hook = entries.Find(h => h.MethodStatement.MethodInfo == method);
 
             if (hook != null)
             {
-                if (hooks.Count == 1)
+                if (entries.Count == 1)
                     stub.DisableRedirection();
 
                 stub.RemoveHook(hook.MemoryNode);
-                hooks.Remove(hook);
+                entries.Remove(hook);
             }
-
 
             return this;
         }
 
-        public void Enable()
+        public MethodHook Enable()
         {
             if (IsEnabled)
-                return;
+                return this;
             IsEnabled = true;
             stub.EnableRedirection();
+
+            return this;
         }
 
-        public void Disable()
+        public MethodHook Disable()
         {
             if (!IsEnabled)
-                return;
+                return this;
             IsEnabled = false;
             stub.DisableRedirection();
+
+            return this;
+        }
+
+        public MethodHook DisposeEntries()
+        {
+            foreach (var entry in entries)            
+                entry.MemoryNode->DestroyNode();
+            return this;
         }
 
         public static MethodHook Create(Delegate targetMethodDelegate) => Create(targetMethodDelegate.Method);

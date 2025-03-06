@@ -26,6 +26,8 @@ namespace Korn.Hooking
             PrepareRedirection();
         }
 
+        public AllocatedRoutine DEBUG_StubRoutine => stubRoutine;
+
         MethodInfo methodInfo;
         MethodStatement methodStatement;
         LinkedArray hooksArray;
@@ -46,7 +48,6 @@ namespace Korn.Hooking
             var methodAddress = methodStatement.MethodPointer;
 
             stubRoutine = MethodAllocator.Instance.CreateAllocatedRoutine(MaxStubCodeSize);
-            Console.WriteLine($"{stubRoutine.Address:X2}");
             BuildRoutineCode();
         }
 
@@ -55,7 +56,7 @@ namespace Korn.Hooking
             const int JmpRel32PointerSize = 6;
 
             var length = Disassembler.CalculateMinInstructionLength((byte*)method, JmpRel32PointerSize);
-            var bytes = Utils.Memory.MemoryExtensions.Read(method, length);
+            var bytes = Utils.Memory.MemoryEx.Read(method, length);
             return bytes;
         }
 
@@ -81,10 +82,14 @@ namespace Korn.Hooking
         {
             var start = *pcode;
 
-            ((Assembler*)pcode)
-            ->WriteBytes(originalPrologueBytes)
-            ->MovRax64(methodStatement.MethodPointer + originalPrologueBytes.Length)
-            ->JmpRax();
+            var asm = (Assembler*)pcode;
+
+            asm->WriteBytes(originalPrologueBytes);
+
+            var address = methodStatement.MethodPointer + originalPrologueBytes.Length;
+            var addressAdress = (IntPtr)(*pcode + 6);
+            asm->JmpRel32Ptr(addressAdress);
+            asm->WriteInt64(address);
 
             return (int)((long)*pcode - (long)start);
         }
@@ -102,7 +107,7 @@ namespace Korn.Hooking
         void WriteRoutineCode(byte** pointer_code)
         {
             var stack = new Stack(methodInfo);
-            stack.SetInitialPrevStackStartOffset(-0x10 /* push: rbp rdi */);
+            stack.SetInitialPrevStackStartOffset(0x10 /* push: rbp rdi */);
             var methodStack = stack.BuildMethodStack();
 
             var epilogueAddress = IntPtr.Zero;
@@ -130,8 +135,8 @@ namespace Korn.Hooking
                 var offset = stackValue.Offset;
 
                 asm
-                ->XorRbpRbp()
-                ->MovRspPtrOff32Rbp(offset);
+                ->XorR11R11()
+                ->MovRspPtrOff32R11(offset);
 
                 MovePointer(returnType.StoreValue, returnType.PointerToStoreValue);
             }
@@ -175,8 +180,8 @@ namespace Korn.Hooking
 
             asm
             ->AddRsp32(stack.MaxStack)
-            ->PopRbp()
             ->PopRdi()
+            ->PopRbp()
             ->Ret();
 
             void MoveRax(Stack.Value from)
@@ -257,21 +262,21 @@ namespace Korn.Hooking
 
             void MoveStackToStack(Stack.StackValue from, Stack.StackValue to)
             {
-                asm->MovRbpRspPtrOff32(from.Offset);
-                asm->MovRspPtrOff32Rbp(to.Offset);
+                asm->MovR11RspPtrOff32(from.Offset);
+                asm->MovRspPtrOff32R11(to.Offset);
             }
 
             void MovePointerStackToStack(Stack.StackValue from, Stack.StackValue to)
             {
-                asm->MovRbpRsp();
+                asm->MovR11Rsp();
 
                 if (from.Offset >= 0)
-                    asm->AddRbp32(from.Offset);
-                else asm->SubRbp32(-from.Offset);
+                    asm->AddR1132(from.Offset);
+                else asm->SubR1132(-from.Offset);
 
                 if (to.Offset >= 0)
-                    asm->MovRspPtrOff32Rbp(to.Offset);
-                else asm->MovRspPtrOff32Rbp(-to.Offset);
+                    asm->MovRspPtrOff32R11(to.Offset);
+                else asm->MovRspPtrOff32R11(-to.Offset);
             }
 
             void MoveStackToRegister(Stack.StackValue from, Stack.RegisterValue to)
@@ -309,6 +314,8 @@ namespace Korn.Hooking
             var method = methodStatement.MethodPointer;
             var asm = (Assembler*)&method;
             asm->JmpRel32Ptr(indirect.Address);
+            for (var i = 6; i < originalPrologueBytes.Length; i++)
+                asm->Nop();
         }
 
         class Stack
@@ -329,7 +336,6 @@ namespace Korn.Hooking
             public readonly int ArgumentsCount;
             public readonly int ParamsCount;
 
-            // should be negative
             public int InitialPrevStackOffset { get; private set; }
 
             int lastCalculatedMaxStack = -1;
@@ -345,7 +351,7 @@ namespace Korn.Hooking
                 return value;
             }
 
-            public int GetOffsetForPrevStack(int index) => InitialPrevStackOffset - MaxStack - index * 0x08 - 0x08/*call return address*/;
+            public int GetOffsetForPrevStack(int index) => InitialPrevStackOffset + ClrRoutineStackOffset + MaxStack + index * 0x08 + 0x08/*call return address*/;
             public int GetOffsetForStartStack(int index) => ClrRoutineStackOffset + index * 0x08;
             public int GetOffsetForEndStack(int index) => MaxStack - index * 0x08 - 0x08;
 

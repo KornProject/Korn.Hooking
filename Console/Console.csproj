@@ -1,9 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <OutputType>Exe</OutputType>
     <TargetFrameworks>net8.0-windows;net472</TargetFrameworks>
     <Platforms>x64</Platforms>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -13,6 +13,8 @@
     <ProjectReference Include="..\..\Korn.Shared\Korn.Shared\Korn.Shared.csproj" />
     <ProjectReference Include="..\..\Korn.Utils.Assembler\Korn.Utils.Assembler\Korn.Utils.Assembler.csproj" />
     <ProjectReference Include="..\..\Korn.Utils.Memory\Korn.Utils.Memory\Korn.Utils.Memory.csproj" />
+    <ProjectReference Include="..\..\Korn.Utils.System\Korn.Utils.System\Korn.Utils.System.csproj" />
+    <ProjectReference Include="..\Korn.Hooking\Korn.Hooking.csproj" />
   </ItemGroup>
 
 </Project>
