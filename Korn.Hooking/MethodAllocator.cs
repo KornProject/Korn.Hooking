@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices;
 
 namespace Korn.Hooking
 {
@@ -652,8 +651,8 @@ namespace Korn.Hooking
                     );
 
                 IsSizeFixed = true;
-
-                Size = size;
+                                
+                originalRoutine.Size = Size = size;
             }
 
             public static AllocatedRoutine From(Routine routine) => new AllocatedRoutine(routine.RoutinesRegion, routine.RegionOffset, routine.Address, routine.Size)
@@ -670,7 +669,7 @@ namespace Korn.Hooking
             public Region RoutinesRegion { get; private set; }
             public int RegionOffset { get; private set; }
             public IntPtr Address { get; private set; }
-            public int Size { get; protected private set; }
+            public int Size { get; set; }
 
             bool disposed;
             public void Dispose()

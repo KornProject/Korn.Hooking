@@ -2,6 +2,7 @@
 {
     static void Main()
     {
-        TestDifferentMethods.Execute();
+        TestFindFreeRoutineSpaceAlgo.Execute();
+        //TestDifferentMethods.Execute();
     }
 }

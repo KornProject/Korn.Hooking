@@ -1,8 +1,7 @@
-﻿using System.Collections.Generic;
+﻿using static Korn.Hooking.MethodAllocator;
 using Korn.Utils.Assembler;
 using System.Reflection;
 using System;
-using static Korn.Hooking.MethodAllocator;
 
 namespace Korn.Hooking
 {
@@ -95,7 +94,7 @@ namespace Korn.Hooking
         }
 
         // do not forgot to fix 0x20 rsp
-        // in the future handle ref ref arg's
+        // in the future handle ref ref arg's, now just use ref type* arg
 
         /*
          * 
@@ -131,7 +130,7 @@ namespace Korn.Hooking
             if (methodStack.HasReturnType)
             {
                 var returnType = methodStack.ReturnType;
-                var stackValue = returnType.StoreValue as Stack.StackValue;
+                var stackValue = returnType.StoreValue as StackValue;
                 var offset = stackValue.Offset;
 
                 asm
@@ -184,89 +183,89 @@ namespace Korn.Hooking
             ->PopRbp()
             ->Ret();
 
-            void MoveRax(Stack.Value from)
+            void MoveRax(MemoryValue from)
             {
-                if (from is Stack.StackValue stackValue)
+                if (from is StackValue stackValue)
                     MoveRaxStack(stackValue);
-                else if (from is Stack.RegisterValue registerValue)
+                else if (from is RegisterValue registerValue)
                     MoveRaxRegister(registerValue);
             }
 
-            void MoveRaxStack(Stack.StackValue value) => asm->MovRaxRspPtrOff32(value.Offset);
+            void MoveRaxStack(StackValue value) => asm->MovRaxRspPtrOff32(value.Offset);
 
-            void MoveRaxRegister(Stack.RegisterValue value)
+            void MoveRaxRegister(RegisterValue value)
             {
                 var register = value.Register;
                 switch (register)
                 {
-                    case Stack.ArgumentRegister.Rcx:
+                    case ArgumentRegister.Rcx:
                         asm->MovRaxRcx();
                         break;
-                    case Stack.ArgumentRegister.Rdx:
+                    case ArgumentRegister.Rdx:
                         asm->MovRaxRdx();
                         break;
-                    case Stack.ArgumentRegister.R8:
+                    case ArgumentRegister.R8:
                         asm->MovRaxR8();
                         break;
-                    case Stack.ArgumentRegister.R9:
+                    case ArgumentRegister.R9:
                         asm->MovRaxR9();
                         break;
                 }
             }
 
-            void Move(Stack.Value from, Stack.Value to)
+            void Move(MemoryValue from, MemoryValue to)
             {
-                if (from is Stack.RegisterValue fromRegisterValue)
+                if (from is RegisterValue fromRegisterValue)
                 {
-                    if (to is Stack.StackValue toStackValue)
+                    if (to is StackValue toStackValue)
                         MoveRegisterToStack(fromRegisterValue, toStackValue);
                     else ThrowNotImpemented();
                 }
-                else if (from is Stack.StackValue fromStackValue)
+                else if (from is StackValue fromStackValue)
                 {
-                    if (to is Stack.RegisterValue toRegisterValue)
+                    if (to is RegisterValue toRegisterValue)
                         MoveStackToRegister(fromStackValue, toRegisterValue);
-                    else if (to is Stack.StackValue toStackValue)
+                    else if (to is StackValue toStackValue)
                         MoveStackToStack(fromStackValue, toStackValue);
                 }
                 else ThrowNotImpemented();
             }
 
-            void MovePointer(Stack.Value from, Stack.Value to)
+            void MovePointer(MemoryValue from, MemoryValue to)
             {
-                if (from is Stack.StackValue fromStackValue && to is Stack.StackValue toStackValue)
+                if (from is StackValue fromStackValue && to is StackValue toStackValue)
                     MovePointerStackToStack(fromStackValue, toStackValue);
                 else ThrowNotImpemented();
             }
 
-            void MoveRegisterToStack(Stack.RegisterValue from, Stack.StackValue to)
+            void MoveRegisterToStack(RegisterValue from, StackValue to)
             {
                 var register = from.Register;
                 var offset = to.Offset;
                 switch (register)
                 {
-                    case Stack.ArgumentRegister.Rcx:
+                    case ArgumentRegister.Rcx:
                         asm->MovRspPtrOff32Rcx(to.Offset);
                         break;
-                    case Stack.ArgumentRegister.Rdx:
+                    case ArgumentRegister.Rdx:
                         asm->MovRspPtrOff32Rdx(to.Offset);
                         break;
-                    case Stack.ArgumentRegister.R8:
+                    case ArgumentRegister.R8:
                         asm->MovRspPtrOff32R8(to.Offset);
                         break;
-                    case Stack.ArgumentRegister.R9:
+                    case ArgumentRegister.R9:
                         asm->MovRspPtrOff32R9(to.Offset);
                         break;
                 }
             }
 
-            void MoveStackToStack(Stack.StackValue from, Stack.StackValue to)
+            void MoveStackToStack(StackValue from, StackValue to)
             {
                 asm->MovR11RspPtrOff32(from.Offset);
                 asm->MovRspPtrOff32R11(to.Offset);
             }
 
-            void MovePointerStackToStack(Stack.StackValue from, Stack.StackValue to)
+            void MovePointerStackToStack(StackValue from, StackValue to)
             {
                 asm->MovR11Rsp();
 
@@ -279,22 +278,22 @@ namespace Korn.Hooking
                 else asm->MovRspPtrOff32R11(-to.Offset);
             }
 
-            void MoveStackToRegister(Stack.StackValue from, Stack.RegisterValue to)
+            void MoveStackToRegister(StackValue from, RegisterValue to)
             {
                 var offset = from.Offset;
                 var register = to.Register;
                 switch (register)
                 {
-                    case Stack.ArgumentRegister.Rcx:
+                    case ArgumentRegister.Rcx:
                         asm->MovRcxPspPtrOff32(offset);
                         break;
-                    case Stack.ArgumentRegister.Rdx:
+                    case ArgumentRegister.Rdx:
                         asm->MovRdxPspPtrOff32(offset);
                         break;
-                    case Stack.ArgumentRegister.R8:
+                    case ArgumentRegister.R8:
                         asm->MovR8PspPtrOff32(offset);
                         break;
-                    case Stack.ArgumentRegister.R9:
+                    case ArgumentRegister.R9:
                         asm->MovR9PspPtrOff32(offset);
                         break;
                 }
@@ -314,126 +313,10 @@ namespace Korn.Hooking
             var method = methodStatement.MethodPointer;
             var asm = (Assembler*)&method;
             asm->JmpRel32Ptr(indirect.Address);
+
+            // for beauty 😊
             for (var i = 6; i < originalPrologueBytes.Length; i++)
                 asm->Nop();
-        }
-
-        class Stack
-        {
-            const int ClrRoutineStackOffset = 0x20;
-
-            public Stack(MethodInfo method)
-            {
-                Method = method;
-
-                HasReturnType = method.ReturnType != typeof(void);
-                ArgumentsCount = method.GetArgumentsEx().Length;
-                ParamsCount = ArgumentsCount + (HasReturnType ? 1 : 0);
-            }
-
-            public readonly MethodInfo Method;
-            public readonly bool HasReturnType;
-            public readonly int ArgumentsCount;
-            public readonly int ParamsCount;
-
-            public int InitialPrevStackOffset { get; private set; }
-
-            int lastCalculatedMaxStack = -1;
-            public int MaxStack => lastCalculatedMaxStack == -1 ? (lastCalculatedMaxStack = CalculateMaxStack()) : lastCalculatedMaxStack;
-
-            public void SetInitialPrevStackStartOffset(int offset) => InitialPrevStackOffset = offset;
-
-            int CalculateMaxStack()
-            {
-                var value = (ParamsCount * 2 * 0x08) + (ParamsCount > 4 ? ((ParamsCount - 4) * 2 * 0x08) : 0) + ClrRoutineStackOffset;
-                if ((value + InitialPrevStackOffset) % 0x10 == 0)
-                    value += 0x08;
-                return value;
-            }
-
-            public int GetOffsetForPrevStack(int index) => InitialPrevStackOffset + ClrRoutineStackOffset + MaxStack + index * 0x08 + 0x08/*call return address*/;
-            public int GetOffsetForStartStack(int index) => ClrRoutineStackOffset + index * 0x08;
-            public int GetOffsetForEndStack(int index) => MaxStack - index * 0x08 - 0x08;
-
-            public MethodStack BuildMethodStack() => new MethodStack(this);
-
-            public class MethodStack
-            {
-                public MethodStack(Stack stack)
-                {
-                    var method = stack.Method;
-                    var arguments = method.GetArgumentsEx().Length;
-                    for (var argumentIndex = 0; argumentIndex < arguments; argumentIndex++)
-                    {
-                        var argument = new Argument(stack, argumentIndex);
-                        Arguments.Add(argument);
-                        Parameters.Add(argument);
-                    }
-
-                    if (method.ReturnType != typeof(void))
-                    {
-                        HasReturnType = true;
-
-                        var parameterIndex = arguments;
-                        ReturnType = new Argument(stack, parameterIndex);
-                        Parameters.Add(ReturnType);
-                    }
-                }
-
-                public readonly List<Argument> Arguments = new List<Argument>();
-                public readonly List<Argument> Parameters = new List<Argument>();
-
-                public readonly bool HasReturnType;
-                public readonly Argument ReturnType;
-            }
-
-            public class Argument
-            {
-                public Argument(Stack stack, int index)
-                {
-                    if (index <= 3)
-                    {
-                        var register = (ArgumentRegister)Enum.GetValues(typeof(ArgumentRegister)).GetValue(index);
-                        InputValue = new RegisterValue(register);
-                        CallingValue = new RegisterValue(register);
-                    }
-                    else
-                    {
-                        InputValue = new StackValue(stack.GetOffsetForPrevStack(index - 4));
-                        CallingValue = new StackValue(stack.GetOffsetForStartStack(index - 4));
-                    }
-
-                    StoreValue = new StackValue(stack.GetOffsetForEndStack(index * 2));
-                    PointerToStoreValue = new StackValue(stack.GetOffsetForEndStack(index * 2 + 1));
-                }
-
-                public Value InputValue;
-                public Value StoreValue;
-                public Value PointerToStoreValue;
-                public Value CallingValue;
-            }
-
-            public abstract class Value { }
-
-            public class StackValue : Value
-            {
-                public StackValue(int offset) => Offset = offset;
-                public int Offset;
-            }
-
-            public class RegisterValue : Value
-            {
-                public RegisterValue(ArgumentRegister register) => Register = register;
-                public ArgumentRegister Register;
-            }
-
-            public enum ArgumentRegister
-            {
-                Rcx,
-                Rdx,
-                R8,
-                R9
-            }
-        }       
+        }         
     }
 }
