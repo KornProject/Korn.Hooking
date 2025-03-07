@@ -99,7 +99,7 @@ namespace Korn.Hooking
 
         /*
          * 
-         * rbp - temp register
+         * r11 - temp register
          * rdi - hook address
          * r10:general - temp storing hook calling result
          * 
@@ -327,7 +327,7 @@ namespace Korn.Hooking
                 Method = method;
 
                 HasReturnType = method.ReturnType != typeof(void);
-                ArgumentsCount = method.GetParameters().Length;
+                ArgumentsCount = method.GetArgumentsEx().Length;
                 ParamsCount = ArgumentsCount + (HasReturnType ? 1 : 0);
             }
 
@@ -362,7 +362,7 @@ namespace Korn.Hooking
                 public MethodStack(Stack stack)
                 {
                     var method = stack.Method;
-                    var arguments = method.GetParameters().Length;
+                    var arguments = method.GetArgumentsEx().Length;
                     for (var argumentIndex = 0; argumentIndex < arguments; argumentIndex++)
                     {
                         var argument = new Argument(stack, argumentIndex);
