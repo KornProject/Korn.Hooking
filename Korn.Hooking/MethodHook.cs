@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Linq;
 using System;
+using Korn.Utils.Algorithms;
 
 namespace Korn.Hooking
 {
@@ -97,10 +98,10 @@ namespace Korn.Hooking
         {
             VerifySignature(method);
 
-            var methodStatement = new MethodStatement(method);
+            var methodStatement = MethodStatement.From(method);
             methodStatement.EnsureMethodIsCompiled();
 
-            var memoryNode = stub.AddHook(methodStatement.MethodPointer);
+            var memoryNode = stub.AddHook(methodStatement.NativeCodePointer);
             var hook = new HookEntry(this, methodStatement, memoryNode);
             entries.Add(hook);
 
@@ -114,14 +115,14 @@ namespace Korn.Hooking
         public MethodHook RemoveEntry(MethodInfoSummary method) => RemoveEntry(method.Method);
         public MethodHook RemoveEntry(MethodInfo method)
         {
-            var hook = entries.Find(h => h.MethodStatement.MethodInfo == method);
+            var hook = entries.Find(h => h.MethodStatement.Method == method);
 
             if (hook != null)
             {
                 if (entries.Count == 1)
                     stub.DisableRedirection();
 
-                stub.RemoveHook(hook.MemoryNode);
+                stub.RemoveHook(hook.LinkedNode);
                 entries.Remove(hook);
             }
 
@@ -148,10 +149,10 @@ namespace Korn.Hooking
             return this;
         }
 
-        public MethodHook DisposeEntries()
+        public MethodHook RemoveAllEntries()
         {
-            foreach (var entry in entries)            
-                entry.MemoryNode->DestroyNode();
+            while (entries.Count != 0)
+                RemoveEntry(entries[0].MethodStatement.Method);
             return this;
         }
 
@@ -169,16 +170,16 @@ namespace Korn.Hooking
             public HookEntry(
                 MethodHook owner, 
                 MethodStatement methodStatement, 
-                LinkedArray.Node* memoryNode)
+                LinkedNode* memoryNode)
             {
                 HookOwner = owner;
                 MethodStatement = methodStatement;
-                MemoryNode = memoryNode;
+                LinkedNode = memoryNode;
             }
 
             public MethodHook HookOwner { get; private set; }
             public MethodStatement MethodStatement { get; private set; }
-            public LinkedArray.Node* MemoryNode { get; private set; }
+            public LinkedNode* LinkedNode { get; private set; }
         }
     }
 }

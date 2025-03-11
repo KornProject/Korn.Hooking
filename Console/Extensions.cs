@@ -1,6 +1,5 @@
 ﻿using Korn.Hooking;
 using System;
-using System.Reflection;
 
 static class Extensions
 {

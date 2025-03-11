@@ -2,6 +2,7 @@
 using Korn.Utils.Assembler;
 using System.Reflection;
 using System;
+using Korn.Utils.Algorithms;
 
 namespace Korn.Hooking
 {
@@ -13,25 +14,25 @@ namespace Korn.Hooking
         {
             this.methodInfo = methodInfo;
 
-            methodStatement = new MethodStatement(methodInfo);
-            methodStatement.EnsureMethodIsCompiled();
-            methodStatement.EnsureMethodIsAccessible();
+            methodStatement = MethodStatement.From(methodInfo);
+            methodStatement.EnsureNativeCodeIsAccessible();
 
-            hooksArray = MethodAllocator.Instance.CreateLinkedArray();
-            indirect = MethodAllocator.Instance.CreateIndirect(methodStatement.MethodPointer);
+            hooksArray = new LinkedArray();
+            indirect = MethodAllocator.Instance.CreateIndirect(methodStatement.NativeCodePointer);
 
             BuildStub();
             DisableRedirection();
             PrepareRedirection();
         }
 
-        public AllocatedRoutine DEBUG_StubRoutine => stubRoutine;
+        public Routine DEBUG_StubRoutine => stubRoutine;
+        public MethodStatement DEBUG_MethodStatement => methodStatement;
 
         MethodInfo methodInfo;
         MethodStatement methodStatement;
         LinkedArray hooksArray;
         Indirect indirect;
-        AllocatedRoutine stubRoutine;
+        Routine stubRoutine;
         int routineStubOffset;
         IntPtr callOritinalMethod => stubRoutine.Address;
         IntPtr stubMethod => stubRoutine.Address + routineStubOffset;
@@ -39,13 +40,11 @@ namespace Korn.Hooking
 
         public void EnableRedirection() => *indirect.IndirectAddress = stubMethod;
         public void DisableRedirection() => *indirect.IndirectAddress = callOritinalMethod;
-        public LinkedArray.Node* AddHook(IntPtr address) => hooksArray.AddNode(address);
-        public void RemoveHook(LinkedArray.Node* node) => hooksArray.RemoveNode(node);
+        public LinkedNode* AddHook(IntPtr address) => hooksArray.AddNode()->SetValue(address);
+        public void RemoveHook(LinkedNode* node) => hooksArray.RemoveNode(node);
 
         void BuildStub()
         {
-            var methodAddress = methodStatement.MethodPointer;
-
             stubRoutine = MethodAllocator.Instance.CreateAllocatedRoutine(MaxStubCodeSize);
             BuildRoutineCode();
         }
@@ -62,7 +61,7 @@ namespace Korn.Hooking
         void BuildRoutineCode()
         {
             var code = (byte*)stubRoutine.Address;
-            originalPrologueBytes = GetPrologueBytes(methodStatement.MethodPointer);
+            originalPrologueBytes = GetPrologueBytes(methodStatement.NativeCodePointer);
             routineStubOffset = WritePrologueInRoutineCode(&code);
             WriteRoutineCode(&code);
 
@@ -74,7 +73,7 @@ namespace Korn.Hooking
                     $"The routine code was requested more than {nameof(MaxStubCodeSize)} bytes for code"
                 );
 
-            stubRoutine.FixSize(codeSize);
+            stubRoutine.Size = codeSize;
         }
 
         int WritePrologueInRoutineCode(byte** pcode)
@@ -85,7 +84,7 @@ namespace Korn.Hooking
 
             asm->WriteBytes(originalPrologueBytes);
 
-            var address = methodStatement.MethodPointer + originalPrologueBytes.Length;
+            var address = methodStatement.NativeCodePointer + originalPrologueBytes.Length;
             var addressAdress = (IntPtr)(*pcode + 6);
             asm->JmpRel32Ptr(addressAdress);
             asm->WriteInt64(address);
@@ -119,7 +118,8 @@ namespace Korn.Hooking
             ->PushRbp()
             ->PushRdi()
             ->SubRsp32(stack.MaxStack)
-            ->MovRdi64(hooksArray.RootNode);
+            ->MovRdi64(hooksArray.MovelessNodePointer)
+            ->MoveRdiRdiPtr();
 
             foreach (var argument in methodStack.Arguments)
             {
@@ -310,7 +310,7 @@ namespace Korn.Hooking
 
         void PrepareRedirection()
         {
-            var method = methodStatement.MethodPointer;
+            var method = methodStatement.NativeCodePointer;
             var asm = (Assembler*)&method;
             asm->JmpRel32Ptr(indirect.Address);
 

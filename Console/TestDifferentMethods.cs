@@ -1,12 +1,13 @@
 ﻿using Korn.Hooking;
 using System;
 using System.IO;
+using System.Resources;
 using System.Runtime.CompilerServices;
 
 static class TestDifferentMethods
 {
     static Type T = typeof(TestDifferentMethods);
-
+    
     public static void Execute()
     {
         ConsoleWriteLine();
@@ -85,18 +86,16 @@ static class TestDifferentMethods
         {
             var hook = MethodHook.Create((Action<int, int, int>)InnerStrangeCode).AddEntryEx(T, nameof(hk_InnerStrangeCode)).Enable();
 
-            Console.WriteLine(Convert.ToString((long)hook.DEBUG_Stub.DEBUG_StubRoutine.Address, 16));
-            Console.ReadLine();
-
             InnerStrangeCode(10, 20, 33);
         }
 
         void StaticStress()
-        {
+        {            
             var hook = MethodHook.Create((Action<int, int>)StressTest).AddEntryEx(T, nameof(hk_StressTest)).Enable();
 
-            Console.WriteLine(Convert.ToString((long)hook.DEBUG_Stub.DEBUG_StubRoutine.Address, 16));
-            Console.ReadLine();
+            //Console.WriteLine(Convert.ToString((long)hook.DEBUG_Stub.DEBUG_StubRoutine.Address, 16));
+            //Console.WriteLine($"{hook.DEBUG_Stub.DEBUG_MethodStatement.DelegatePointer:X} {hook.DEBUG_Stub.DEBUG_MethodStatement.NativeCodePointer:X} {hook.DEBUG_Stub.DEBUG_StubRoutine.Address:X}");
+            //Console.ReadLine();
 
             for (var i = 0; i < 10000; i++)
             {
@@ -230,12 +229,14 @@ static class TestDifferentMethods
     [MethodImpl(MethodImplOptions.NoInlining)]
     static void StressTest(int a, int b)
     {
+        Console.WriteLine(a + b); 
         Console.WriteLine(++stressCounter);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     static bool hk_StressTest(ref int a, ref int b)
     {
+        Console.WriteLine(a + b); 
         stressCounter++;
         return true;
     }

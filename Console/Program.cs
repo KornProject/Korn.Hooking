@@ -2,7 +2,7 @@
 {
     static void Main()
     {
-        TestFindFreeRoutineSpaceAlgo.Execute();
-        //TestDifferentMethods.Execute();
+        //TestFindFreeRoutineSpaceAlgo.Execute();
+        TestDifferentMethods.Execute();
     }
 }
