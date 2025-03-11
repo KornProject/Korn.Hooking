@@ -15,7 +15,6 @@ namespace Korn.Hooking
             this.methodInfo = methodInfo;
 
             methodStatement = MethodStatement.From(methodInfo);
-            methodStatement.EnsureNativeCodeIsAccessible();
 
             hooksArray = new LinkedArray();
             indirect = MethodAllocator.Instance.CreateIndirect(methodStatement.NativeCodePointer);

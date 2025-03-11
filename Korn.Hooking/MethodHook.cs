@@ -99,7 +99,6 @@ namespace Korn.Hooking
             VerifySignature(method);
 
             var methodStatement = MethodStatement.From(method);
-            methodStatement.EnsureMethodIsCompiled();
 
             var memoryNode = stub.AddHook(methodStatement.NativeCodePointer);
             var hook = new HookEntry(this, methodStatement, memoryNode);

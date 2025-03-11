@@ -18,200 +18,262 @@ namespace Korn.Hooking
         {
             Method = method;
             Handle = method.MethodHandle;
+
+            RuntimeHelpers.PrepareMethod(Handle);
             EnsureMethodIsCompiled();
+            EnsureMemoryRegionIsAccessible(NativeCodePointer);
         }
 
         public MethodInfo Method { get; private set; }
         public RuntimeMethodHandle Handle { get; private set; }
         public IntPtr DelegatePointer => Handle.GetFunctionPointer();
-        public IntPtr NativeCodePointer { get; private protected set; } // may be null if method is not compiled
-        public MethodState State { get; private protected set; }
+        public IntPtr NativeCodePointer { get; internal set; } // may be null if method is not compiled
+        public bool HasNativeCode => NativeCodePointer != IntPtr.Zero;
+        public bool IsCompiled { get; internal set; }
 
-        public abstract void EnsureMethodIsCompiled();
-
-        public bool IsNative() => State == MethodState.Native;
-        public bool IsCompiled() => 
-            State == MethodState.JitThresholdCounter || 
-            State == MethodState.Native || 
-            (this is MethodStatementNet8 && MethodStatementNet8.HasTCState && !MethodStatementNet8.HasTC && State == MethodState.TemporaryEntryPoint);
-        public bool HaNativeCode() => State != MethodState.NotAssembled;
-
-        public void EnsureNativeCodeIsAccessible()
-        {
-            var pointer = NativeCodePointer;
-            if (pointer == IntPtr.Zero)
-                return;
-
-            EnsureMemoryRegionIsAccessible(pointer);
-        }
-
-        private protected void EnsureMemoryRegionIsAccessible(IntPtr address)
-        {
-            var mbi = MemoryAllocator.Query(address);
-            if (!mbi.Protect.IsWritable())
-                mbi.SetProtection(MemoryProtect.ExecuteReadWrite);
-        }
+        private protected abstract void EnsureMethodIsCompiled();
 
         public static MethodStatement From(MethodInfoSummary summary) => From(summary.Method);
 
         public static MethodStatement From(MethodInfo method)
         {
-            var exists = ExistsMethodStatements.FirstOrDefault(m => m.Method == method);
-            if (exists != null)
-                return null;
+            lock (ExistsMethodStatements)
+            {
+                var exists = ExistsMethodStatements.FirstOrDefault(m => m.Method == method);
+                if (exists != null)
+                    return exists;
 
+                exists = CreateMethodStatement(method);
+                ExistsMethodStatements.Add(exists);
+                return exists;
+            }
+        }
+
+        public static MethodStatement CreateMethodStatement(MethodInfo method)
+            =>
 #if NET8_0
-            exists = new MethodStatementNet8(method);
+            new MethodStatementNet8(method); 
 #elif NET472
-            exists = new MethodStatementNet472(method);
+            new MethodStatementNet472(method);
 #endif
 
-            ExistsMethodStatements.Add(exists);
-
-            return exists;
+        public static void EnsureMemoryRegionIsAccessible(IntPtr address)
+        {
+            var mbi = MemoryAllocator.Query(address);
+            if (!mbi.Protect.IsWritable())
+                mbi.SetProtection(MemoryProtect.ExecuteReadWrite);
         }
-    }
-
-    public enum MethodState
-    {
-        NotAssembled, // no native code assigned to this method
-        TemporaryEntryPoint, // .net8 only: has precode with redirect to native code
-        JitThresholdCounter, // .net8 only: had precord with redirect to another precode with counting and calling native code
-        Native // no precode, method is native
     }
 
     public unsafe class MethodStatementNet472 : MethodStatement
     {
         public MethodStatementNet472(MethodInfo method) : base(method) { }
 
-        public override void EnsureMethodIsCompiled()
+        private protected override void EnsureMethodIsCompiled()
         {
             var pointer = DelegatePointer;
             var dasm = (Disassembler*)&pointer;
 
-            if (dasm->IsCallRel32Instruction)
+            while (true)
             {
+                if (dasm->IsCallRel32Instruction)
+                {
+                    Thread.Sleep(1);
+                    continue;
+                }
+
+                if (dasm->IsJmpRel32Instruction)
+                    pointer = dasm->GetJmpRel32Operand();
+
                 NativeCodePointer = pointer;
-                State = MethodState.NotAssembled;
-                return;
+                IsCompiled = true;
             }
-
-            if (dasm->IsJmpRel32Instruction)
-                pointer = dasm->GetJmpRel32Operand();
-
-            NativeCodePointer = pointer;
-            State = MethodState.Native;
         }
     }
 
     // for .net7+
     public unsafe class MethodStatementNet8 : MethodStatement
     {
-        // > Ich sage Hallo zu millu98 von onlyfans und Col-e von recaf.
-        static void A() { }
-
-        internal static bool HasTCState;
-        internal static bool HasTC;
-        static MethodStatementNet8()
-        {
-#if NET472
-            return;
-#endif
-            var method = ((Action)A).Method;
-            var methodStatement = new MethodStatementNet8(method);
-            HasTC = methodStatement.State == MethodState.JitThresholdCounter;
-            HasTCState = true;
-
-            KornShared.Logger.WriteMessage($"Korn.Hooking.MethodStatementNet8->.cctor: Environment has TieredCompilation feature.");
-        }
+        static MethodStatementNet8() => RuntimeHelpers.RunClassConstructor(typeof(Watcher).TypeHandle);
 
         public MethodStatementNet8(MethodInfo method) : base(method) { }
 
-        public override void EnsureMethodIsCompiled()
+        private protected override void EnsureMethodIsCompiled()
         {
-            const int threshold = 50;
+            Watcher.AddToQueue(this);
 
-            if (IsCompiled())
-                return;
+            while (!HasNativeCode)
+                Thread.Sleep(1);
+        }
 
-            RuntimeHelpers.PrepareMethod(Handle);
+        public static class Watcher
+        {
+            // > Ich sage Hallo zu millu98 von onlyfans und Col-e von recaf.
+            static void A() { }
 
-            var attempts = 0;
-            while (attempts++ < threshold)
+            static Watcher()
             {
-                var method = DelegatePointer;
-                var pointer = method;
-                var dasm = (Disassembler*)&pointer;
+#if NET472
+                return;
+#endif
+                var thread = new Thread(Body) { Name = "Korn.TieredCompilation.Watcher" };
+                thread.Start();                
+                KornShared.Logger.WriteMessage($"Korn.Hooking.MethodStatementNet8.Watcher: Started watcher thread with ID {thread.ManagedThreadId}");
+            }
 
-                if (dasm->IsLengthChangingInstruction)
-                    dasm->SkipLengthChangingInstruction();
+            static List<MethodStatement> pool = new List<MethodStatement>();
+            static void AddToPool(MethodStatement method)
+            {
+                lock (pool)
+                    pool.Add(method);
+            }
 
-                if (dasm->IsJmpPtrRel32Instruction &&
-                    dasm->NextInstruction()->IsMov10PtrInstruction &&
-                    dasm->NextInstruction()->IsJmpPtrRel32Instruction)
+            static void RemoveFromPool(MethodStatement method)
+            {
+                lock (pool)
+                    pool.Remove(method);
+            }
+
+            public static void AddToQueue(MethodStatement method) => AddToPool(method);
+
+            static void Body()
+            {
+                var hasTiredCompilation = CheckTieredCompilation();
+                if (hasTiredCompilation)
+                    KornShared.Logger.WriteMessage("Korn.Hooking.MethodStatementNet8.Watcher: Has Tiered Compilation feature.");
+
+                var index = -1;
+                while (true)
                 {
-                    pointer = method;
-                    var innerMethod = dasm->GetJmpPtrRel32Operand();
-                    if ((long)innerMethod - (long)method == 0x06)
+                    var count = pool.Count;
+                    if (count == 0)
                     {
-                        NativeCodePointer = method;
-                        State = MethodState.NotAssembled;
-
-                        Thread.Sleep(1);
-                        // it looks like jit is overloaded and hasn't got to the assembling of this method yet
+                        Thread.Sleep(2);
                         continue;
                     }
 
-                    pointer = method = innerMethod;
-                    if (dasm->IsMovRaxRel32PtrInstruction &&
-                        dasm->NextInstruction()->IsDecPtrRaxInstruction &&
-                        dasm->NextInstruction()->IsJeRel8Instruction && dasm->GetJeRel8Offset() == 0x06)
+                    index++;
+                    if (index >= count)
+                        index = 0;
+
+                    // deletion from the pool performs in only one thread, so we don't have to worry about the index being less than count
+                    var method = pool[index];
+                    var pointer = method.DelegatePointer;
+
+                    if (!MethodDetermination.Precode.IsIt(pointer))
                     {
-                        pointer = method;
-                        EnsureMemoryRegionIsAccessible(pointer);
-
-                        innerMethod =
-                        ((Disassembler*)&pointer)
-                        ->SkipInstructions(3)
-                        ->GetJmpPtrRel32Operand();
-
-                        pointer = method;
-                        ((Assembler*)&pointer)
-                        ->NopInstructions(3)
-                        // mov rax, […]
-                        // dec [rax]
-                        // je <JMP.&OnCallCountThresholdReachedStub>
-                        ->NextInstruction() // jmp […]
-                        ->NopInstruction(); // jmp [<&OnCallCountThresholdReachedStub>]
-
-                        NativeCodePointer = innerMethod;
-                        State = MethodState.JitThresholdCounter;
-                        KornShared.Logger.WriteMessage($"Korn.Hooking.MethodStatementNet8->EnsureMethodIsCompiled: method compiled after {attempts} attempts.");
-                        return;
+                        method.NativeCodePointer = pointer;
+                        if (!hasTiredCompilation)
+                            Finalize();
+                        continue;
                     }
 
-                    NativeCodePointer = method;
-                    State = MethodState.TemporaryEntryPoint;
+                    if (MethodDetermination.Precode.GetRedirectOffset(pointer) == 0x06)
+                        continue;
 
-                    if (HasTCState && !HasTC)
-                        return;
+                    pointer = MethodDetermination.Precode.GetRedirectAddress(pointer);
+                    if (!MethodDetermination.TieredCompilationCounter.IsIt(pointer))
+                    {
+                        method.NativeCodePointer = pointer;
+                        if (!hasTiredCompilation)
+                            Finalize();
+                        continue;
+                    }
 
-                    Thread.Sleep(5);
-                    // it is expected that TemporaryEntryPoint was after NotAssembled and the next state itself will be JitThresholdCounter
-                    continue;
-                }
+                    method.NativeCodePointer = MethodDetermination.TieredCompilationCounter.GetRedirectAddress(pointer);
+                    EnsureMemoryRegionIsAccessible(pointer);
+                    MethodDetermination.TieredCompilationCounter.NopCounter(pointer);
 
-                NativeCodePointer = method;
-                State = MethodState.Native;
+                    Finalize();
+
+                    void Finalize()
+                    {
+                        method.IsCompiled = true;
+                        RemoveFromPool(method);
+                        index--;
+                    }
+                }                                
             }
 
-            if (!HasTCState)
-                return;
+            static TimeSpan TieredCompilationTimeout = TimeSpan.FromMilliseconds(500);
+            static bool CheckTieredCompilation()
+            {
+                var method = ((Action)A).Method;
+                var methodHandle = method.MethodHandle;
+                RuntimeHelpers.PrepareMethod(methodHandle);
 
-            throw new KornError(
-                "Korn.Hooking.MethodStatementNet8.EnsureMethodIsCompiled:",
-                "Unable to compile method: timeout"
-            );
+                var startTime = DateTime.Now;
+                while (DateTime.Now - startTime < TieredCompilationTimeout)
+                {
+                    Thread.Sleep(1);
+                    var pointer = methodHandle.GetFunctionPointer();
+                                        
+                    if (!MethodDetermination.Precode.IsIt(pointer))
+                        continue;
+
+                    if (MethodDetermination.Precode.GetRedirectOffset(pointer) == 0x06)
+                        continue;
+
+                    pointer = MethodDetermination.Precode.GetRedirectAddress(pointer);
+
+                    if (!MethodDetermination.TieredCompilationCounter.IsIt(pointer))
+                        continue;
+
+                    return true;
+                }
+
+                return false;
+            }
+        }
+
+        public static class MethodDetermination
+        {
+            public static class Precode
+            {
+                public static bool IsIt(IntPtr address)
+                {
+                    var dasm = (Disassembler*)&address;
+
+                    if (dasm->IsLengthChangingInstruction)
+                        dasm->SkipLengthChangingInstruction();
+
+                    return
+                        dasm->IsJmpPtrRel32Instruction &&
+                        dasm->NextInstruction()->IsMov10PtrInstruction &&
+                        dasm->NextInstruction()->IsJmpPtrRel32Instruction;
+                }
+
+                public static int GetRedirectOffset(IntPtr address) => ((Disassembler*)&address)->GetJmpPtrRel32Offset();
+
+                public static IntPtr GetRedirectAddress(IntPtr address) => ((Disassembler*)&address)->GetJmpPtrRel32Operand();
+            }
+
+            public static class TieredCompilationCounter
+            {
+                public static bool IsIt(IntPtr address)
+                {
+                    var dasm = (Disassembler*)&address;
+
+                    return
+                        dasm->IsMovRaxRel32PtrInstruction &&
+                        dasm->NextInstruction()->IsDecPtrRaxInstruction &&
+                        dasm->NextInstruction()->IsJeRel8Instruction && dasm->GetJeRel8Offset() == 0x06;
+                }
+
+                public static IntPtr GetRedirectAddress(IntPtr address) =>
+                    ((Disassembler*)&address)
+                    ->SkipInstructions(3)
+                    ->GetJmpPtrRel32Operand();
+
+                public static void NopCounter(IntPtr address) =>
+                    ((Assembler*)&address)
+                    ->NopInstructions(3)
+                    // mov rax, […]
+                    // dec [rax]
+                    // je <JMP.&OnCallCountThresholdReachedStub>
+                    ->NextInstruction() // jmp […]
+                    ->NopInstruction(); // jmp [<&OnCallCountThresholdReachedStub>]
+            }           
         }
     }
 }
