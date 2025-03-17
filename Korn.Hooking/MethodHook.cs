@@ -1,5 +1,4 @@
-﻿using static Korn.Hooking.MethodAllocator;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Reflection;
 using System.Linq;
 using System;
@@ -154,6 +153,13 @@ namespace Korn.Hooking
                 RemoveEntry(entries[0].MethodStatement.Method);
             return this;
         }
+
+        public override string ToString() => "{ " + string.Join(", ", 
+            "Method: " + targetMethod.Name,
+            "DelegatePointer: " + Convert.ToString((long)targetMethod.MethodHandle.GetFunctionPointer(), 16),
+            "Enabled: " + IsEnabled,
+            "Stub: " + stub.ToString()
+        ) + " }";
 
         public static MethodHook Create(Delegate targetMethodDelegate) => Create(targetMethodDelegate.Method);
         public static MethodHook Create(MethodInfoSummary targetMethod)

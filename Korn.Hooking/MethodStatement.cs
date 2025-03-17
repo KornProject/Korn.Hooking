@@ -8,6 +8,8 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
+// If it ever have problems with Jit Tier-1 compilation, it can be added a check for a hook, if the native method doesn't have a hook, throw an exception
+
 namespace Korn.Hooking
 {
     public unsafe abstract class MethodStatement
@@ -87,6 +89,7 @@ namespace Korn.Hooking
 
                 NativeCodePointer = pointer;
                 IsCompiled = true;
+                return; 
             }
         }
     }
@@ -118,12 +121,15 @@ namespace Korn.Hooking
 #endif
                 var thread = new Thread(Body) { Name = "Korn.TieredCompilation.Watcher" };
                 thread.Start();                
-                KornShared.Logger.WriteMessage($"Korn.Hooking.MethodStatementNet8.Watcher: Started watcher thread with ID {thread.ManagedThreadId}");
+                KornShared.Logger.WriteMessage($"Started watcher thread with ID {thread.ManagedThreadId}");
             }
 
             static List<MethodStatement> pool = new List<MethodStatement>();
             static void AddToPool(MethodStatement method)
             {
+                if (method == null)
+                    throw new KornError("Trying to add null-method to method statements pool for watcher.");
+
                 lock (pool)
                     pool.Add(method);
             }
@@ -140,7 +146,7 @@ namespace Korn.Hooking
             {
                 var hasTiredCompilation = CheckTieredCompilation();
                 if (hasTiredCompilation)
-                    KornShared.Logger.WriteMessage("Korn.Hooking.MethodStatementNet8.Watcher: Has Tiered Compilation feature.");
+                    KornShared.Logger.WriteMessage("Environment has Tiered Compilation feature.");
 
                 var index = -1;
                 while (true)
@@ -183,6 +189,7 @@ namespace Korn.Hooking
                     method.NativeCodePointer = MethodDetermination.TieredCompilationCounter.GetRedirectAddress(pointer);
                     EnsureMemoryRegionIsAccessible(pointer);
                     MethodDetermination.TieredCompilationCounter.NopCounter(pointer);
+                    KornShared.Logger.WriteMessage($"Disabled jit counter for method {method.Method.Name}");
 
                     Finalize();
 

@@ -316,6 +316,10 @@ namespace Korn.Hooking
             // for beauty 😊
             for (var i = 6; i < originalPrologueBytes.Length; i++)
                 asm->Nop();
-        }         
+        }
+
+        public override string ToString() => "{ " + string.Join(", ",
+            "Routine: " + Convert.ToString((long)stubRoutine.Address, 16)
+        ) + " }";
     }
 }
