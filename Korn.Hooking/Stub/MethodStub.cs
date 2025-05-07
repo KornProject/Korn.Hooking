@@ -53,7 +53,7 @@ namespace Korn.Hooking
             const int JmpRel32PointerSize = 6;
 
             var length = Disassembler.CalculateMinInstructionLength((byte*)method, JmpRel32PointerSize);
-            var bytes = Utils.Memory.MemoryEx.Read(method, length);
+            var bytes = Utils.Memory.Read(method, length);
             return bytes;
         }
 
@@ -118,7 +118,7 @@ namespace Korn.Hooking
             ->PushRdi()
             ->SubRsp32(stack.MaxStack)
             ->MovRdi64(hooksArray.MovelessNodePointer)
-            ->MoveRdiRdiPtr();
+            ->MovRdiRdiPtr();
 
             foreach (var argument in methodStack.Arguments)
             {

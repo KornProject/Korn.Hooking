@@ -1,6 +1,6 @@
 ﻿using Korn.Shared;
+using Korn.Utils;
 using Korn.Utils.Assembler;
-using Korn.Utils.Memory;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,7 +9,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 
 // If it ever have problems with Jit Tier-1 compilation, it can be added a check for a hook, if the native method doesn't have a hook, throw an exception
-
+#pragma warning disable CS0162 // Unreachable code detected
 namespace Korn.Hooking
 {
     public unsafe abstract class MethodStatement

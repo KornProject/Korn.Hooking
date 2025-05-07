@@ -7,10 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Korn.Interface\Korn.Interface\Korn.Interface.csproj" />
-    <ProjectReference Include="..\..\Korn.Logger\Korn.Logger\Korn.Logger.csproj" />
-    <ProjectReference Include="..\..\Korn.Shared.Internal\Korn.Shared.Internal\Korn.Shared.Internal.csproj" />
-    <ProjectReference Include="..\..\Korn.Shared\Korn.Shared\Korn.Shared.csproj" />
+    <ProjectReference Include="..\..\Korn.Core\Korn.Core\Korn.Core.csproj" />
     <ProjectReference Include="..\..\Korn.Utils.Algorithms\Korn.Utils.Algorithms\Korn.Utils.Algorithms.csproj" />
     <ProjectReference Include="..\..\Korn.Utils.Assembler\Korn.Utils.Assembler\Korn.Utils.Assembler.csproj" />
     <ProjectReference Include="..\..\Korn.Utils.Memory\Korn.Utils.Memory\Korn.Utils.Memory.csproj" />

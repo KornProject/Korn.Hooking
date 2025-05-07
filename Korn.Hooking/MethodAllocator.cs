@@ -1,8 +1,7 @@
-﻿using Korn.Utils.Algorithms;
-using Korn.Utils.Memory;
+﻿using System.Collections.Generic;
+using Korn.Utils.Algorithms;
+using Korn.Utils;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace Korn.Hooking
 {
@@ -183,7 +182,7 @@ namespace Korn.Hooking
                            // size may be negative, this region will be added to the used regions, but will not actually be used
 
                 var start = (long)mbi->BaseAddress + mbi->RegionSize - size;
-                return new MemoryRegion.Caved(mbi->BaseAddress, (IntPtr)start, size);
+                return new MemoryRegion.Caved((IntPtr)mbi->BaseAddress, (IntPtr)start, size);
 
                 int CountLastZeroBytes(IntPtr address)
                 {
@@ -198,7 +197,7 @@ namespace Korn.Hooking
             bool IsCaveFound(MemoryBaseInfo* mbi)
             {
                 foreach (var blob in caves)
-                    if (blob.RegionBase == mbi->BaseAddress)
+                    if (blob.RegionBase == (IntPtr)mbi->BaseAddress)
                         return true;
                 return false;
             }
@@ -357,7 +356,7 @@ namespace Korn.Hooking
                     return;
                 disposed = true;
 
-                MemoryEx.Zero(Address, Size);
+                Memory.Zero(Address, Size);
                 RoutinesRegion.RemoveRoutine(this);
             }
 
@@ -376,7 +375,7 @@ namespace Korn.Hooking
                 public Routine AddRoutine(BlockPlacementCollection.AddRequest request, byte* routineBytes)
                 {
                     var routine = AddRoutine(request);
-                    MemoryEx.Copy(routine.Address, (IntPtr)routineBytes, request.Size);
+                    Memory.Copy(routineBytes, (byte*)routine.Address, request.Size);
                     return routine;
                 }
 
@@ -494,7 +493,7 @@ namespace Korn.Hooking
                     public readonly IntPtr Address;
                     public readonly int Size;
 
-                    public static Descriptor From(MemoryBaseInfo* mbi) => new Descriptor(mbi->BaseAddress, (int)mbi->RegionSize);
+                    public static Descriptor From(MemoryBaseInfo* mbi) => new Descriptor((IntPtr)mbi->BaseAddress, (int)mbi->RegionSize);
                 }
             }
         }
@@ -503,7 +502,7 @@ namespace Korn.Hooking
     public unsafe static class AddressSpaceUtils
     {
         public static bool IsRegionNearToAddress(MemoryBaseInfo* mbi, IntPtr nearTo)
-            => IsRegionNearToAddress(mbi->BaseAddress, mbi->RegionSize, nearTo);
+            => IsRegionNearToAddress((IntPtr)mbi->BaseAddress, mbi->RegionSize, nearTo);
 
         public static bool IsRegionNearToAddress(IntPtr regionAddress, long regionSize, IntPtr nearTo) => 
             (long)regionAddress > (long)nearTo
