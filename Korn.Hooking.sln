@@ -19,6 +19,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Korn.Utils.Algorithms", "..
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Korn.Core", "..\Korn.Core\Korn.Core\Korn.Core.csproj", "{19DBDD74-83A9-4D72-8BB9-5D6BCEE4BAF6}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Korn.Utils.PEImageReader", "..\Korn.Utils.PEImageReader\Korn.Utils.PEImageReader\Korn.Utils.PEImageReader.csproj", "{7CEFA9C6-EBEB-4EEA-9A71-AA0EEB952003}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -38,6 +40,8 @@ Global
 		{FEFCEF19-82A5-4817-B2E3-ED49CFCEAD01}.Debug|x64.Build.0 = Debug|x64
 		{19DBDD74-83A9-4D72-8BB9-5D6BCEE4BAF6}.Debug|x64.ActiveCfg = Debug|x64
 		{19DBDD74-83A9-4D72-8BB9-5D6BCEE4BAF6}.Debug|x64.Build.0 = Debug|x64
+		{7CEFA9C6-EBEB-4EEA-9A71-AA0EEB952003}.Debug|x64.ActiveCfg = Debug|x64
+		{7CEFA9C6-EBEB-4EEA-9A71-AA0EEB952003}.Debug|x64.Build.0 = Debug|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -48,5 +52,6 @@ Global
 		{3795B278-3BFA-41EC-B959-06832D18DD17} = {F136C36C-BA80-405F-83F5-F42F2227D6AA}
 		{FEFCEF19-82A5-4817-B2E3-ED49CFCEAD01} = {F136C36C-BA80-405F-83F5-F42F2227D6AA}
 		{19DBDD74-83A9-4D72-8BB9-5D6BCEE4BAF6} = {F136C36C-BA80-405F-83F5-F42F2227D6AA}
+		{7CEFA9C6-EBEB-4EEA-9A71-AA0EEB952003} = {F136C36C-BA80-405F-83F5-F42F2227D6AA}
 	EndGlobalSection
 EndGlobal

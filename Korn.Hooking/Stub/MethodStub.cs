@@ -1,5 +1,5 @@
 ﻿using static Korn.Hooking.MethodAllocator;
-using Korn.Utils.Assembler;
+using Korn.Utils;
 using System.Reflection;
 using System;
 using Korn.Utils.Algorithms;
