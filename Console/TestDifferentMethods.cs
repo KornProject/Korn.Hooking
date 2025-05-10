@@ -3,6 +3,7 @@ using System;
 using System.IO;
 using System.Resources;
 using System.Runtime.CompilerServices;
+using System.Threading;
 
 static class TestDifferentMethods
 {
@@ -22,6 +23,7 @@ static class TestDifferentMethods
         Console.WriteLine();
         StaticInnerStrangeCode();
         Console.WriteLine();
+        Thread.Sleep(1000);
         StaticStress();
         Console.WriteLine();
 

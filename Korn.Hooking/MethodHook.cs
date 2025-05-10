@@ -29,8 +29,8 @@ namespace Korn.Hooking
 
         void VerifySignature(MethodInfo method)
         {
-            var methodParameters = MethodInfoUtils.GetParameters(method);
-            var targetParameters = MethodInfoUtils.GetParameters(targetMethod);
+            var methodParameters = method.GetArgumentsEx();
+            var targetParameters = targetMethod.GetArgumentsEx();
 
             string message = null;
 
