@@ -100,8 +100,12 @@ namespace Korn.Hooking
             var methodStatement = MethodStatement.From(method);
 
             var memoryNode = stub.AddHook(methodStatement.NativeCodePointer);
-            var hook = new HookEntry(this, methodStatement, memoryNode);
-            entries.Add(hook);
+            var entry = new HookEntry(this, methodStatement, memoryNode);
+            return AddEntry(entry);
+        }
+        MethodHook AddEntry(HookEntry entry)
+        {
+            entries.Add(entry);
 
             if (entries.Count == 1 && IsEnabled)
                 stub.EnableRedirection();
@@ -113,36 +117,40 @@ namespace Korn.Hooking
         public MethodHook RemoveEntry(MethodInfoSummary method) => RemoveEntry(method.Method);
         public MethodHook RemoveEntry(MethodInfo method)
         {
-            var hook = entries.Find(h => h.MethodStatement.Method == method);
+            foreach (var entry in entries)
+                if (entry.MethodStatement.Method == method)
+                    return RemoveEntry(entry);
 
-            if (hook != null)
-            {
-                if (entries.Count == 1)
-                    stub.DisableRedirection();
+            return this;
+        }
+        MethodHook RemoveEntry(HookEntry entry)
+        {
+            if (entries.Count == 1)
+                stub.DisableRedirection();
 
-                stub.RemoveHook(hook.LinkedNode);
-                entries.Remove(hook);
-            }
-
+            stub.RemoveHook(entry.LinkedNode);
+            entries.Remove(entry);
             return this;
         }
 
         public MethodHook Enable()
         {
-            if (IsEnabled)
-                return this;
-            IsEnabled = true;
-            stub.EnableRedirection();
+            if (!IsEnabled)
+            {
+                IsEnabled = true;
+                stub.EnableRedirection();
+            }            
 
             return this;
         }
 
         public MethodHook Disable()
         {
-            if (!IsEnabled)
-                return this;
-            IsEnabled = false;
-            stub.DisableRedirection();
+            if (IsEnabled)
+            {
+                IsEnabled = false;
+                stub.DisableRedirection();
+            }
 
             return this;
         }
@@ -154,37 +162,32 @@ namespace Korn.Hooking
             return this;
         }
 
-        public override string ToString() => "{ " + string.Join(", ", 
-            "Method: " + targetMethod.Name,
-            "DelegatePointer: " + Convert.ToString((long)targetMethod.MethodHandle.GetFunctionPointer(), 16),
-            "Enabled: " + IsEnabled,
-            "Stub: " + stub.ToString()
-        ) + " }";
+        public override string ToString() 
+            => $"{{ Method: {targetMethod.Name}, DelegatePointer: {targetMethod.MethodHandle.GetFunctionPointer().ToHexString()}, Enabled: {IsEnabled}, Stub: {stub} }}";            
 
         public static MethodHook Create(Delegate targetMethodDelegate) => Create(targetMethodDelegate.Method);
-        public static MethodHook Create(MethodInfoSummary targetMethod)
+        public static MethodHook Create(MethodInfoSummary targetMethodSumarry) => Create(targetMethodSumarry.Method);
+        public static MethodHook Create(MethodInfo targetMethod)
         {
-            var existsHook = ActiveHooks.FirstOrDefault(hook => hook.targetMethod == targetMethod.Method);
-            if (existsHook != null)
-                return existsHook;
+            foreach (var hook in ActiveHooks)
+                if (hook.targetMethod == targetMethod)
+                    return hook;
+
             return new MethodHook(targetMethod);
         }
 
         public class HookEntry
         {
-            public HookEntry(
-                MethodHook owner, 
-                MethodStatement methodStatement, 
-                LinkedNode* memoryNode)
+            public HookEntry(MethodHook owner, MethodStatement methodStatement, LinkedNode* memoryNode)
             {
                 HookOwner = owner;
                 MethodStatement = methodStatement;
                 LinkedNode = memoryNode;
             }
 
-            public MethodHook HookOwner { get; private set; }
-            public MethodStatement MethodStatement { get; private set; }
-            public LinkedNode* LinkedNode { get; private set; }
+            public readonly MethodHook HookOwner;
+            public readonly MethodStatement MethodStatement;
+            public readonly LinkedNode* LinkedNode;
         }
     }
 }
