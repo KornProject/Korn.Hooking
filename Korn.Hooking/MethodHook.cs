@@ -1,94 +1,65 @@
 ﻿using System.Collections.Generic;
+using Korn.Utils.Algorithms;
 using System.Reflection;
 using System.Linq;
 using System;
-using Korn.Utils.Algorithms;
 
 namespace Korn.Hooking
 {
     public unsafe class MethodHook
     {
-        static List<MethodHook> ActiveHooks = new List<MethodHook>();
+        static List<MethodHook> activeHooks = new List<MethodHook>();
 
         MethodHook(MethodInfoSummary targetMethod)
         {
             this.targetMethod = targetMethod;
 
             stub = new MethodStub(targetMethod);
-            ActiveHooks.Add(this);
+            activeHooks.Add(this);
         }
 
         public MethodStub DEBUG_Stub => stub;
 
         MethodStub stub;
-        MethodInfo targetMethod;
-        
+        MethodInfo targetMethod;        
         List<HookEntry> entries = new List<HookEntry>();
 
         public bool IsEnabled { get; private set; }
 
         void VerifySignature(MethodInfo method)
         {
-            var methodParameters = method.GetArgumentsEx();
-            var targetParameters = targetMethod.GetArgumentsEx();
-
-            string message = null;
+            var methodArguments = method.GetArgumentsEx();
+            var targetArguments = targetMethod.GetArgumentsEx();
+            var targetParameters = targetMethod.GetParametersEx();
 
             if (!method.IsStatic)
-            {
-                message = "method must be static";
-                goto Return;
-            }
-
+                Throw("method must be static");
+            
             if (method.ReturnType != typeof(bool))
+                Throw("return type must be 'bool'");
+
+            if (methodArguments.Length != targetParameters.Length)
+                Throw("wrong number of arguments");
+
+            if (methodArguments.Any(param => !param.IsByRef))
+                Throw("all arguments must have the ref modifier");
+
+            for (var argIndex = 0; argIndex < targetParameters.Length; argIndex++)
+                if (targetParameters[argIndex].FullName.Contains(methodArguments[argIndex].FullName))
+                    Throw(
+                        $"the type of {argIndex + 1}-th, {methodArguments[argIndex].Name}, " +
+                        $"argument is not the same as expected {targetParameters[argIndex].Name}"
+                    );
+            
+            void Throw(string message)
             {
-                message = "return type must be 'bool'";
-                goto Return;
-            }
-
-            var exprectedArgumentTypes = targetParameters.ToList();
-            if (targetMethod.ReturnType != typeof(void))
-                exprectedArgumentTypes.Add(targetMethod.ReturnType);
-
-            if (method.GetParameters().Length != exprectedArgumentTypes.Count)
-            {
-                message = "wrong number of arguments";
-                goto Return;
-            }
-
-            var foundNonRefArgument = methodParameters.FirstOrDefault(param => !param.IsByRef);
-            if (foundNonRefArgument != null)
-            {
-                message = "all arguments must have the ref modifier";
-                goto Return;
-            }
-
-            for (var argIndex = 0; argIndex < exprectedArgumentTypes.Count; argIndex++)
-                if (exprectedArgumentTypes[argIndex].FullName.Contains(methodParameters[argIndex].FullName))
-                // you are laughing, but I really don't know how to do type checking with RefBy ignored
-                {
-                    message = $"the type of {argIndex + 1}-th, {methodParameters[argIndex].Name}, " +
-                              $"argument is not the same as expected {exprectedArgumentTypes[argIndex].Name}";
-                    goto Return;
-                }
-
-            Return:
-            if (message != null)
                 throw new KornError(
-                    $"MethodHook->VerifySignature: Bad method signature - {message}.",
-                    $"Expected signature: {GenerateSignature()}"
+                    $"MethodHook->VerifySignature: Bad method signature: \"{message}\".",
+                    $"Expected signature: {GenerateExpectedSignature()}"
                 );
-
-            return;
-
-            string GenerateSignature()
-            {
-                var types = targetMethod.GetParameters().Select(param => param.ParameterType).ToList();
-                if (targetMethod.ReturnType != typeof(void))
-                    types.Add(targetMethod.ReturnType);
-
-                return $"bool HookImplementation({string.Join(" ", types.Select(t => $"ref {t.Name}"))})";
             }
+
+            string GenerateExpectedSignature() => $"bool {method.Name}({string.Join(" ", targetArguments.Select(t => $"ref {t.Name}"))})";
         }
 
         public MethodHook AddEntry(Delegate hookDelegate) => AddEntry(hookDelegate.Method);
@@ -169,7 +140,7 @@ namespace Korn.Hooking
         public static MethodHook Create(MethodInfoSummary targetMethodSumarry) => Create(targetMethodSumarry.Method);
         public static MethodHook Create(MethodInfo targetMethod)
         {
-            foreach (var hook in ActiveHooks)
+            foreach (var hook in activeHooks)
                 if (hook.targetMethod == targetMethod)
                     return hook;
 

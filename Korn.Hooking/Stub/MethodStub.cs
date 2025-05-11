@@ -314,8 +314,7 @@ namespace Korn.Hooking
             asm->JmpRel32Ptr(indirect.Address);
 
             // for beauty 😊
-            for (var i = 6; i < originalPrologueBytes.Length; i++)
-                asm->Nop();
+            asm->Nop(originalPrologueBytes.Length - 6);
         }
 
         public override string ToString() => "{ " + string.Join(", ",
