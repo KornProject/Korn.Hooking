@@ -469,7 +469,7 @@ namespace Korn.Hooking
 
                 public Descriptor RegionDescriptor;
 
-                public void Free() => MemoryAllocator.Free(RegionDescriptor.Address, RegionDescriptor.Size);
+                public void Free() => MemoryAllocator.Free(RegionDescriptor.Address);
 
                 public static Allocated From(Descriptor regionDescriptor) => new Allocated(regionDescriptor);
                 public static Allocated From(MemoryBaseInfo* mbi) => From(Descriptor.From(mbi));

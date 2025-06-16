@@ -22,12 +22,16 @@ namespace Korn.Hooking
 
         static JitWatcherMethodPool methodPool = new JitWatcherMethodPool();
 
-        public static void AddMethodToQueue(MethodStatement method) => methodPool.Add(method);
+        public static void AddMethodToQueue(MethodStatement method)
+        {
+            methodPool.Add(method);
+            KornShared.Logger.WriteMessage($"pool {methodPool.Count}. addeed");
+        }
 
         static void Body()
         {
-            var hasTiredCompilation = CheckTieredCompilation();
-            if (hasTiredCompilation)
+            var hasTieredCompilation = CheckTieredCompilation();
+            if (hasTieredCompilation)
                 KornShared.Logger.WriteMessage("Environment has Tiered Compilation feature.");
 
             var index = -1;
@@ -51,8 +55,11 @@ namespace Korn.Hooking
                 if (!MethodAsmCodeDetermination.Precode.IsIt(pointer))
                 {
                     method.NativeCodePointer = pointer;
-                    if (!hasTiredCompilation)
+                    if (!hasTieredCompilation)
+                    {
                         Finalize();
+                        //KornShared.Logger.WriteMessage($"pool {methodPool.Count}. no tiered compilation");
+                    }
                     continue;
                 }
 
@@ -63,8 +70,11 @@ namespace Korn.Hooking
                 if (!MethodAsmCodeDetermination.TieredCompilationCounter.IsIt(pointer))
                 {
                     method.NativeCodePointer = pointer;
-                    if (!hasTiredCompilation)
+                    if (!hasTieredCompilation)
+                    {
                         Finalize();
+                        //KornShared.Logger.WriteMessage($"pool {methodPool.Count}. no tiered compilation");
+                    }
                     continue;
                 }
 
@@ -73,6 +83,7 @@ namespace Korn.Hooking
                 MethodAsmCodeDetermination.TieredCompilationCounter.NopCounter(pointer);
                 KornShared.Logger.WriteMessage($"Disabled jit counter for method {method.Method.Name}");
 
+                //KornShared.Logger.WriteMessage($"pool {methodPool.Count}. disabled jit counter");
                 Finalize();
 
                 void Finalize()

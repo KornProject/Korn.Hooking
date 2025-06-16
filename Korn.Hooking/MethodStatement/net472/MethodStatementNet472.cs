@@ -10,6 +10,9 @@ namespace Korn.Hooking
 
         private protected override void EnsureMethodIsCompiled()
         {
+            if (IsCompiled)
+                return;
+
             var pointer = DelegatePointer;
             var dasm = (Disassembler*)&pointer;
 

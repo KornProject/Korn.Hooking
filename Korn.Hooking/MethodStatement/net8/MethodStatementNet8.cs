@@ -18,6 +18,9 @@ namespace Korn.Hooking
 
         private protected override void EnsureMethodIsCompiled()
         {
+            if (IsCompiled)
+                return;
+
             JitWatcher.AddMethodToQueue(this);
 
             while (!HasNativeCode)

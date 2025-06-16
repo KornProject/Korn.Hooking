@@ -1,16 +1,51 @@
-﻿using Korn.Hooking;
+﻿using Korn.ClrJit;
+using Korn.Hooking;
+using Korn.Utils;
 using System;
+using System.Diagnostics;
 using System.IO;
-using System.Resources;
+using System.Reflection;
+using System.Runtime;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
-static class TestDifferentMethods
+static unsafe class TestDifferentMethods
 {
     static Type T = typeof(TestDifferentMethods);
-    
+
+    static MethodInfo methodof(Delegate @delegate) => @delegate.Method;
+
     public static void Execute()
-    {
+    {        
+        var i = new Instance();
+
+        Stopwatch stopwatch = Stopwatch.StartNew();
+        stopwatch.Start();
+        MethodStatement.CompileMethodsAsync(
+            methodof((Action<object>)Console.WriteLine),
+            methodof(DiffArgs),
+            methodof(DiffArgsRet),
+            methodof(MuchArgs),
+            methodof(i.MuchArgs),
+            methodof(InnerStrangeCode),
+            methodof(StressTest),
+
+            methodof(hk_ConsoleWriteLine),
+            methodof(hk_DiffArgs),
+            methodof(hk_DiffArgsRet),
+            methodof(hk_MuchArgs),
+            methodof(hk_InstanceMuchArgs),
+            methodof(hk_InnerStrangeCode),
+            methodof(hk_StressTest)
+        );
+
+        stopwatch.Stop();
+        Console.WriteLine($"{stopwatch.ElapsedMilliseconds}ms");
+
+        Thread.Sleep(500);
+
+
+
         ConsoleWriteLine();
         Console.WriteLine();
         StaticDiffArgs();
@@ -23,7 +58,6 @@ static class TestDifferentMethods
         Console.WriteLine();
         StaticInnerStrangeCode();
         Console.WriteLine();
-        Thread.Sleep(1000);
         StaticStress();
         Console.WriteLine();
 
@@ -31,7 +65,7 @@ static class TestDifferentMethods
 
         void ConsoleWriteLine()
         {
-            var hook = MethodHook.Create((Action<object>)Console.WriteLine).AddEntryEx(T, nameof(hk_ConsoleWriteLine)).Enable();
+            var hook = MethodHook.Create((Action<object>)Console.WriteLine).AddEntry(hk_ConsoleWriteLine).Enable();
 
             Console.WriteLine((object)3);
             Console.WriteLine((object)4L);
@@ -52,7 +86,7 @@ static class TestDifferentMethods
 
         void StaticDiffArgs()
         {
-            var hook = MethodHook.Create((Action<bool, int, string>)DiffArgs).AddEntryEx(T, nameof(hk_DiffArgs)).Enable();
+            var hook = MethodHook.Create((Action<bool, int, string>)DiffArgs).AddEntry(hk_DiffArgs).Enable();
 
             DiffArgs(true, 10, "ab");
             DiffArgs(false, 10, "ab");
@@ -60,7 +94,7 @@ static class TestDifferentMethods
 
         void StaticDiffArgsRet()
         {
-            var hook = MethodHook.Create((Func<bool, int, string, string>)DiffArgsRet).AddEntryEx(T, nameof(hk_DiffArgsRet)).Enable();
+            var hook = MethodHook.Create((Func<bool, int, string, string>)DiffArgsRet).AddEntry(hk_DiffArgsRet).Enable();
 
             Console.WriteLine(DiffArgsRet(true, 10, "ab"));
             Console.WriteLine(DiffArgsRet(false, 10, "ab"));
@@ -68,7 +102,7 @@ static class TestDifferentMethods
 
         void StaticMuchArgs()
         {
-            var hook = MethodHook.Create((Func<bool, int, int, int, int, int, string>)MuchArgs).AddEntryEx(T, nameof(hk_MuchArgs)).Enable();
+            var hook = MethodHook.Create((Func<bool, int, int, int, int, int, string>)MuchArgs).AddEntry(hk_MuchArgs).Enable();
 
             Console.WriteLine(MuchArgs(true, 0, 10, 100, 1000, 10000));
             Console.WriteLine(MuchArgs(false, 0, 10, 100, 1000, 10000));
@@ -78,7 +112,7 @@ static class TestDifferentMethods
         {
             var instance = new Instance();
 
-            var hook = MethodHook.Create((Func<bool, int, int, int, int, int, string>)instance.MuchArgs).AddEntryEx(T, nameof(hk_InstanceMuchArgs)).Enable();
+            var hook = MethodHook.Create((Func<bool, int, int, int, int, int, string>)instance.MuchArgs).AddEntry(hk_InstanceMuchArgs).Enable();
 
             Console.WriteLine(instance.MuchArgs(true, 0, 10, 100, 1000, 10000));
             Console.WriteLine(instance.MuchArgs(false, 0, 10, 100, 1000, 10000));
@@ -86,20 +120,20 @@ static class TestDifferentMethods
 
         void StaticInnerStrangeCode()
         {
-            var hook = MethodHook.Create((Action<int, int, int>)InnerStrangeCode).AddEntryEx(T, nameof(hk_InnerStrangeCode)).Enable();
+            var hook = MethodHook.Create((Action<int, int, int>)InnerStrangeCode).AddEntry(hk_InnerStrangeCode).Enable();
 
             InnerStrangeCode(10, 20, 33);
         }
 
         void StaticStress()
         {            
-            var hook = MethodHook.Create((Action<int, int>)StressTest).AddEntryEx(T, nameof(hk_StressTest)).Enable();
+            var hook = MethodHook.Create((Action<int, int>)StressTest).AddEntry(hk_StressTest).Enable();
 
             //Console.WriteLine(Convert.ToString((long)hook.DEBUG_Stub.DEBUG_StubRoutine.Address, 16));
             //Console.WriteLine($"{hook.DEBUG_Stub.DEBUG_MethodStatement.DelegatePointer:X} {hook.DEBUG_Stub.DEBUG_MethodStatement.NativeCodePointer:X} {hook.DEBUG_Stub.DEBUG_StubRoutine.Address:X}");
             //Console.ReadLine();
 
-            for (var i = 0; i < 10000; i++)
+            for (var i = 0; i < 1000; i++)
             {
                 StressTest(i, i);
             }

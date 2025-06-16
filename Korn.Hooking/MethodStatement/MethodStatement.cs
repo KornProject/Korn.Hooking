@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Linq;
 using Korn.Utils;
 using System;
+using System.Threading.Tasks;
 
 namespace Korn.Hooking
 {
@@ -15,10 +16,6 @@ namespace Korn.Hooking
         {
             Method = method;
             Handle = method.MethodHandle;
-
-            PrepareMethod();
-            EnsureMethodIsCompiled();
-            EnsureMemoryRegionIsAccessible(NativeCodePointer);
         }
 
         public readonly MethodInfo Method;
@@ -28,6 +25,13 @@ namespace Korn.Hooking
         public bool HasNativeCode => NativeCodePointer != IntPtr.Zero;
         public bool IsCompiled { get; internal set; }
 
+        void Initialize()
+        {
+            PrepareMethod();
+            EnsureMethodIsCompiled();
+            EnsureMemoryRegionIsAccessible(NativeCodePointer);
+        }
+
         void PrepareMethod() => PrepareMethod(Handle);
 
         private protected abstract void EnsureMethodIsCompiled();
@@ -36,16 +40,19 @@ namespace Korn.Hooking
 
         public static MethodStatement From(MethodInfo method)
         {
+            MethodStatement methodStatement;
             lock (ExistsMethodStatements)
             {
                 var exists = ExistsMethodStatements.FirstOrDefault(m => m.Method == method);
                 if (exists != null)
                     return exists;
 
-                exists = CreateMethodStatement(method);
-                ExistsMethodStatements.Add(exists);
-                return exists;
+                methodStatement = CreateMethodStatement(method);
+                ExistsMethodStatements.Add(methodStatement);
             }
+
+            methodStatement.Initialize();
+            return methodStatement;
         }
 
         static MethodStatement CreateMethodStatement(MethodInfo method)
@@ -63,7 +70,16 @@ namespace Korn.Hooking
                 mbi.SetProtection(MemoryProtect.ExecuteReadWrite);
         }
 
-        public static void PrepareMethod(MethodInfo method) => PrepareMethod(method);
+        public static void PrepareMethod(MethodInfo method) => PrepareMethod(method.MethodHandle);
+
         public static void PrepareMethod(RuntimeMethodHandle handle) => RuntimeHelpers.PrepareMethod(handle);
+
+        public static void CompileMethodAsync(MethodInfo method) => Task.Run(() => CreateMethodStatement(method));
+
+        public static void CompileMethodsAsync(params MethodInfo[] methods)
+        {
+            foreach (var method in methods)
+                CompileMethodAsync(method);
+        }
     }
 }
