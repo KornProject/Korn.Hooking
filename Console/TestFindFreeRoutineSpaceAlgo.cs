@@ -1,5 +1,5 @@
-﻿using Region = Korn.Utils.Algorithms.BlockPlacementCollection.Region<Korn.Utils.Algorithms.BlockPlacementCollection.Block>;
-using Block = Korn.Utils.Algorithms.BlockPlacementCollection.Block;
+﻿using Region = Korn.Modules.Algorithms.BlockPlacementCollection.Region<Korn.Modules.Algorithms.BlockPlacementCollection.Block>;
+using Block = Korn.Modules.Algorithms.BlockPlacementCollection.Block;
 
 class TestFindFreeRoutineSpaceAlgo
 {

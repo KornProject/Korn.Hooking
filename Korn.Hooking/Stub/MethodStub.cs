@@ -2,7 +2,7 @@
 using Korn.Utils;
 using System.Reflection;
 using System;
-using Korn.Utils.Algorithms;
+using Korn.Modules.Algorithms;
 
 namespace Korn.Hooking
 {

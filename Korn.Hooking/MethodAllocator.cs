@@ -1,5 +1,5 @@
 ﻿using System.Collections.Generic;
-using Korn.Utils.Algorithms;
+using Korn.Modules.Algorithms;
 using Korn.Utils;
 using System;
 
