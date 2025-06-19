@@ -5,6 +5,7 @@ using System.Linq;
 using Korn.Utils;
 using System;
 using System.Threading.Tasks;
+using Korn.Modules.WinApi.Kernel;
 
 namespace Korn.Hooking
 {

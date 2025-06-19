@@ -3,6 +3,7 @@ using Korn.Modules.Algorithms;
 using System.Reflection;
 using System.Linq;
 using System;
+using Korn.Logger;
 
 namespace Korn.Hooking
 {

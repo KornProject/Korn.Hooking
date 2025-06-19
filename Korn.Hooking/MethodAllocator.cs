@@ -2,6 +2,8 @@
 using Korn.Modules.Algorithms;
 using Korn.Utils;
 using System;
+using Korn.Modules.WinApi.Kernel;
+using Korn.Logger;
 
 namespace Korn.Hooking
 {
@@ -356,7 +358,7 @@ namespace Korn.Hooking
                     return;
                 disposed = true;
 
-                Memory.Zero(Address, Size);
+                Memory.Zero((void*)Address, Size);
                 RoutinesRegion.RemoveRoutine(this);
             }
 

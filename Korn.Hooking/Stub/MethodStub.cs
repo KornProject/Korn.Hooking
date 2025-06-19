@@ -3,6 +3,7 @@ using Korn.Utils;
 using System.Reflection;
 using System;
 using Korn.Modules.Algorithms;
+using Korn.Logger;
 
 namespace Korn.Hooking
 {
@@ -53,7 +54,7 @@ namespace Korn.Hooking
             const int JmpRel32PointerSize = 6;
 
             var length = Disassembler.CalculateMinInstructionLength((byte*)method, JmpRel32PointerSize);
-            var bytes = Utils.Memory.Read(method, length);
+            var bytes = Utils.Memory.Read((void*)method, length);
             return bytes;
         }
 
