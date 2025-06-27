@@ -1,5 +1,4 @@
 ﻿using static Korn.Hooking.MethodAllocator;
-using Korn.Utils;
 using System.Reflection;
 using System;
 using Korn.Modules.Algorithms;
@@ -54,6 +53,9 @@ namespace Korn.Hooking
             const int JmpRel32PointerSize = 6;
 
             var length = Disassembler.CalculateMinInstructionLength((byte*)method, JmpRel32PointerSize);
+            if (length == -1)
+                throw new Exception($"MethodStub.GetPlogueBytes: Passed wrong method asm code. Method pointer: {method}");
+
             var bytes = Utils.Memory.Read((void*)method, length);
             return bytes;
         }
