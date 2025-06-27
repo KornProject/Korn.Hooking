@@ -11,6 +11,7 @@
     <ProjectReference Include="..\..\Korn.Modules.Algorithms\Korn.Modules.Algorithms\Korn.Modules.Algorithms.csproj" />
     <ProjectReference Include="..\..\Korn.Modules.Assembler\Korn.Modules.Assembler\Korn.Modules.Assembler.csproj" />
     <ProjectReference Include="..\..\Korn.Utils.Memory\Korn.Utils.Memory\Korn.Utils.Memory.csproj" />
+    <ProjectReference Include="..\..\Korn.Utils.Process\Korn.Utils.Process\Korn.Utils.Process.csproj" />
   </ItemGroup>
 
 </Project>

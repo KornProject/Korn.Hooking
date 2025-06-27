@@ -1,5 +1,4 @@
-﻿using Korn.ClrJit;
-using Korn.Hooking;
+﻿using Korn.Hooking;
 using Korn.Utils;
 using System;
 using System.Diagnostics;
@@ -11,13 +10,11 @@ using System.Threading;
 
 static unsafe class TestDifferentMethods
 {
-    static Type T = typeof(TestDifferentMethods);
-
     static MethodInfo methodof(Delegate @delegate) => @delegate.Method;
 
     public static void Execute()
     {        
-        var i = new Instance();
+        var instance = new Instance();
 
         Stopwatch stopwatch = Stopwatch.StartNew();
         stopwatch.Start();
@@ -26,7 +23,7 @@ static unsafe class TestDifferentMethods
             methodof(DiffArgs),
             methodof(DiffArgsRet),
             methodof(MuchArgs),
-            methodof(i.MuchArgs),
+            methodof(instance.MuchArgs),
             methodof(InnerStrangeCode),
             methodof(StressTest),
 
@@ -43,8 +40,6 @@ static unsafe class TestDifferentMethods
         Console.WriteLine($"{stopwatch.ElapsedMilliseconds}ms");
 
         Thread.Sleep(500);
-
-
 
         ConsoleWriteLine();
         Console.WriteLine();
@@ -128,10 +123,6 @@ static unsafe class TestDifferentMethods
         void StaticStress()
         {            
             var hook = MethodHook.Create((Action<int, int>)StressTest).AddEntry(hk_StressTest).Enable();
-
-            //Console.WriteLine(Convert.ToString((long)hook.DEBUG_Stub.DEBUG_StubRoutine.Address, 16));
-            //Console.WriteLine($"{hook.DEBUG_Stub.DEBUG_MethodStatement.DelegatePointer:X} {hook.DEBUG_Stub.DEBUG_MethodStatement.NativeCodePointer:X} {hook.DEBUG_Stub.DEBUG_StubRoutine.Address:X}");
-            //Console.ReadLine();
 
             for (var i = 0; i < 1000; i++)
             {

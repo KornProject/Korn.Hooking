@@ -24,7 +24,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Korn.ClrJit\Korn.ClrJit\Korn.ClrJit.csproj" />
     <ProjectReference Include="..\..\Korn.Modules.Assembler\Korn.Modules.Assembler\Korn.Modules.Assembler.csproj" />
     <ProjectReference Include="..\..\Korn.Utils.Memory\Korn.Utils.Memory\Korn.Utils.Memory.csproj" />
     <ProjectReference Include="..\..\Korn.Utils.System\Korn.Utils.System\Korn.Utils.System.csproj" />
