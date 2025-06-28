@@ -31,13 +31,11 @@ namespace Korn.Hooking
         MethodAllocator()
         {
             regionAllocator = new RegionAllocator();
-            caveFinder = new CaveFinder();
             routineRegionAllocator = new Routine.Region.Allocator(regionAllocator);
-            indirectRegionAllocator = new Indirect.Region.Allocator(regionAllocator, caveFinder);
+            indirectRegionAllocator = new Indirect.Region.Allocator(regionAllocator);
         }
 
         RegionAllocator regionAllocator;
-        CaveFinder caveFinder;
         Routine.Region.Allocator routineRegionAllocator;
         Indirect.Region.Allocator indirectRegionAllocator;
 
@@ -90,118 +88,6 @@ namespace Korn.Hooking
             {
                 foreach (var region in regions)
                     region.Dispose();
-            }
-        }
-
-        public class CaveFinder
-        {
-            const int MinCaveFreeSize = 0x10;
-
-            List<MemoryRegion.Caved> caves = new List<MemoryRegion.Caved>();
-
-            public MemoryRegion.Caved GetFreeCaveNear(IntPtr address)
-            {
-                return FindMemoryCave(address);
-            }
-
-            MemoryRegion.Caved FindMemoryCave(IntPtr address)
-            {
-                var mbi = MemoryAllocator.Query(address);
-
-                MemoryRegion.Caved freeCave;
-                do
-                {
-                    freeCave = FindFreeCaveNear(address, &mbi);
-                    caves.Add(freeCave);
-                }
-                while (freeCave.Size < MinCaveFreeSize);
-
-                return freeCave;
-            }
-
-            MemoryRegion.Caved FindFreeCaveNear(IntPtr address, MemoryBaseInfo* mbi)
-            {
-                var cave = FindFreeCaveNearTop(address, mbi);
-                if (cave == null)
-                    cave = FindFreeCaveNearBot(address, mbi);
-                if (cave == null)
-                    throw new KornError(
-                        "Korn.Hooking.MethodAllocator: " +
-                        "There are no free regions or caves to allocate memory for hooking funtionality, the arrow struck Achilles' heel 😞"
-                    );
-
-                return cave;
-            }
-
-            MemoryRegion.Caved FindFreeCaveNearTop(IntPtr address, MemoryBaseInfo* startMbi)
-            {
-                if (!IsCaveFound(startMbi) && IsSuitForCave(startMbi))
-                    return BuildCaveBlobFromFreeCave(startMbi);
-
-                var mbi = MemoryAllocator.QueryNextTop(startMbi);
-                while ((long)startMbi->BaseAddress > 0x10000 && AddressSpaceUtils.IsRegionNearToAddress(&mbi, address))
-                {
-                    if (!IsCaveFound(&mbi) && IsSuitForCave(&mbi))
-                        return BuildCaveBlobFromFreeCave(&mbi);
-
-                    mbi = MemoryAllocator.QueryNextTop(&mbi);
-                }
-
-                return null;
-            }
-
-            MemoryRegion.Caved FindFreeCaveNearBot(IntPtr address, MemoryBaseInfo* startMbi)
-            {
-                if (!IsCaveFound(startMbi) && IsSuitForCave(startMbi))
-                    return BuildCaveBlobFromFreeCave(startMbi);
-
-                var mbi = MemoryAllocator.QueryNextBot(startMbi);
-                while ((long)startMbi->BaseAddress > 0x10000 && AddressSpaceUtils.IsRegionNearToAddress(&mbi, address))
-                {
-                    if (!IsCaveFound(&mbi) && IsSuitForCave(&mbi))
-                        return BuildCaveBlobFromFreeCave(&mbi);
-
-                    mbi = MemoryAllocator.QueryNextBot(&mbi);
-                }
-
-                return null;
-            }
-
-            MemoryRegion.Caved BuildCaveBlobFromFreeCave(MemoryBaseInfo* mbi)
-            {
-                mbi->SetProtection(MemoryProtect.ExecuteReadWrite);
-
-                /* // I forgot why I added that code 🥺
-                var isExecutable =
-                    mbi->Protect.HasFlag(MemoryProtect.Execute) ||
-                    mbi->Protect.HasFlag(MemoryProtect.ExecuteRead) || // usual case
-                    mbi->Protect.HasFlag(MemoryProtect.ExecuteReadWrite) ||
-                    mbi->Protect.HasFlag(MemoryProtect.ExecuteWriteCopy);
-                */
-
-                var size = CountLastZeroBytes((IntPtr)((long)mbi->BaseAddress + mbi->RegionSize - 1));
-                size -= 8; // prevent the use of memory used by an instruction
-                           // size may be negative, this region will be added to the used regions, but will not actually be used
-
-                var start = (long)mbi->BaseAddress + mbi->RegionSize - size;
-                return new MemoryRegion.Caved((IntPtr)mbi->BaseAddress, (IntPtr)start, size);
-
-                int CountLastZeroBytes(IntPtr address)
-                {
-                    var pointer = (byte*)address;
-                    while (*pointer-- == 0) ;
-                    return (int)((long)address - (long)pointer + 1);
-                }
-            }
-
-            bool IsSuitForCave(MemoryBaseInfo* mbi) => mbi->Type == MemoryType.Image;
-
-            bool IsCaveFound(MemoryBaseInfo* mbi)
-            {
-                foreach (var blob in caves)
-                    if (blob.RegionBase == (IntPtr)mbi->BaseAddress)
-                        return true;
-                return false;
             }
         }
 
@@ -290,15 +176,13 @@ namespace Korn.Hooking
 
                 public class Allocator
                 {
-                    public Allocator(RegionAllocator regionAllocator, CaveFinder caveFinder)
+                    public Allocator(RegionAllocator regionAllocator)
                     {
                         this.regionAllocator = regionAllocator;
-                        this.caveFinder = caveFinder;
                     }
 
                     List<Region> regions = new List<Region>();
                     RegionAllocator regionAllocator;
-                    CaveFinder caveFinder;
 
                     public Indirect CreateIndirect(IntPtr nearTo)
                     {
@@ -335,8 +219,7 @@ namespace Korn.Hooking
                             if (allocatedRegion != null)
                                 return allocatedRegion;
 
-                            var caveRegion = caveFinder.GetFreeCaveNear(nearTo);
-                            return caveRegion;
+                            throw new Exception($"MemoryAllocator: No regions near to memory 0x{nearTo.ToHexString()}");
                         }
                     }
                 }
