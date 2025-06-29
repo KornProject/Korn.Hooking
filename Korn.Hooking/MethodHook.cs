@@ -19,8 +19,6 @@ namespace Korn.Hooking
             activeHooks.Add(this);
         }
 
-        public MethodStub DEBUG_Stub => stub;
-
         MethodStub stub;
         MethodInfo targetMethod;        
         List<HookEntry> entries = new List<HookEntry>();

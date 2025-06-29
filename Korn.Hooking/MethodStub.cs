@@ -50,9 +50,7 @@ namespace Korn.Hooking
 
         static byte[] GetPrologueBytes(IntPtr method)
         {
-            const int JmpRel32PointerSize = 6;
-
-            var length = Disassembler.CalculateMinInstructionLength((byte*)method, JmpRel32PointerSize);
+            var length = Disassembler.CalculateMinInstructionLength((byte*)method, Assembler.JmpRel32Size);
             if (length == -1)
                 throw new Exception($"MethodStub.GetPlogueBytes: Passed wrong method asm code. Method pointer: {method}");
 
@@ -125,8 +123,8 @@ namespace Korn.Hooking
 
             foreach (var argument in methodStack.Arguments)
             {
-                Move(argument.InputValue, argument.StoreValue);
-                MovePointer(argument.StoreValue, argument.PointerToStoreValue);
+                AssemblerExtensions.Move(asm, argument.InputValue, argument.StoreValue);
+                AssemblerExtensions.MovePointer(asm, argument.StoreValue, argument.PointerToStoreValue);
             }
 
             if (methodStack.HasReturnType)
@@ -139,15 +137,15 @@ namespace Korn.Hooking
                 ->XorR11R11()
                 ->MovRspPtrOff32R11(offset);
 
-                MovePointer(returnType.StoreValue, returnType.PointerToStoreValue);
+                AssemblerExtensions.MovePointer(asm, returnType.StoreValue, returnType.PointerToStoreValue);
             }
 
             // entry
             var func_getNode = asm->GetCurrentAddress();
             asm->MovRaxRdiPtr();
 
-            foreach (var argument in methodStack.Parameters)            
-                Move(argument.PointerToStoreValue, argument.CallingValue);
+            foreach (var argument in methodStack.Parameters)
+                AssemblerExtensions.Move(asm, argument.PointerToStoreValue, argument.CallingValue);
 
             asm->CallRax();
 
@@ -155,7 +153,7 @@ namespace Korn.Hooking
             if (methodStack.HasReturnType)
             {
                 asm->MovR10Rax();
-                MoveRax(methodStack.ReturnType.StoreValue);
+                AssemblerExtensions.MoveRax(asm, methodStack.ReturnType.StoreValue);
                 asm->CmpR108(0);
             }
             else asm->CmpRax8(0);
@@ -171,7 +169,7 @@ namespace Korn.Hooking
 
             // call original method
             foreach (var argument in methodStack.Arguments)
-                Move(argument.StoreValue, argument.CallingValue);
+                AssemblerExtensions.Move(asm, argument.StoreValue, argument.CallingValue);
 
             asm->CallRel32(entryPoint - routineStubOffset);
 
@@ -184,130 +182,6 @@ namespace Korn.Hooking
             ->PopRdi()
             ->PopRbp()
             ->Ret();
-
-            void MoveRax(MemoryValue from)
-            {
-                if (from is StackValue stackValue)
-                    MoveRaxStack(stackValue);
-                else if (from is RegisterValue registerValue)
-                    MoveRaxRegister(registerValue);
-            }
-
-            void MoveRaxStack(StackValue value) => asm->MovRaxRspPtrOff32(value.Offset);
-
-            void MoveRaxRegister(RegisterValue value)
-            {
-                var register = value.Register;
-                switch (register)
-                {
-                    case ArgumentRegister.Rcx:
-                        asm->MovRaxRcx();
-                        break;
-                    case ArgumentRegister.Rdx:
-                        asm->MovRaxRdx();
-                        break;
-                    case ArgumentRegister.R8:
-                        asm->MovRaxR8();
-                        break;
-                    case ArgumentRegister.R9:
-                        asm->MovRaxR9();
-                        break;
-                }
-            }
-
-            void Move(MemoryValue from, MemoryValue to)
-            {
-                if (from is RegisterValue fromRegisterValue)
-                {
-                    if (to is StackValue toStackValue)
-                        MoveRegisterToStack(fromRegisterValue, toStackValue);
-                    else ThrowNotImpemented();
-                }
-                else if (from is StackValue fromStackValue)
-                {
-                    if (to is RegisterValue toRegisterValue)
-                        MoveStackToRegister(fromStackValue, toRegisterValue);
-                    else if (to is StackValue toStackValue)
-                        MoveStackToStack(fromStackValue, toStackValue);
-                }
-                else ThrowNotImpemented();
-            }
-
-            void MovePointer(MemoryValue from, MemoryValue to)
-            {
-                if (from is StackValue fromStackValue && to is StackValue toStackValue)
-                    MovePointerStackToStack(fromStackValue, toStackValue);
-                else ThrowNotImpemented();
-            }
-
-            void MoveRegisterToStack(RegisterValue from, StackValue to)
-            {
-                var register = from.Register;
-                var offset = to.Offset;
-                switch (register)
-                {
-                    case ArgumentRegister.Rcx:
-                        asm->MovRspPtrOff32Rcx(to.Offset);
-                        break;
-                    case ArgumentRegister.Rdx:
-                        asm->MovRspPtrOff32Rdx(to.Offset);
-                        break;
-                    case ArgumentRegister.R8:
-                        asm->MovRspPtrOff32R8(to.Offset);
-                        break;
-                    case ArgumentRegister.R9:
-                        asm->MovRspPtrOff32R9(to.Offset);
-                        break;
-                }
-            }
-
-            void MoveStackToStack(StackValue from, StackValue to)
-            {
-                asm->MovR11RspPtrOff32(from.Offset);
-                asm->MovRspPtrOff32R11(to.Offset);
-            }
-
-            void MovePointerStackToStack(StackValue from, StackValue to)
-            {
-                asm->MovR11Rsp();
-
-                if (from.Offset >= 0)
-                    asm->AddR1132(from.Offset);
-                else asm->SubR1132(-from.Offset);
-
-                if (to.Offset >= 0)
-                    asm->MovRspPtrOff32R11(to.Offset);
-                else asm->MovRspPtrOff32R11(-to.Offset);
-            }
-
-            void MoveStackToRegister(StackValue from, RegisterValue to)
-            {
-                var offset = from.Offset;
-                var register = to.Register;
-                switch (register)
-                {
-                    case ArgumentRegister.Rcx:
-                        asm->MovRcxPspPtrOff32(offset);
-                        break;
-                    case ArgumentRegister.Rdx:
-                        asm->MovRdxPspPtrOff32(offset);
-                        break;
-                    case ArgumentRegister.R8:
-                        asm->MovR8PspPtrOff32(offset);
-                        break;
-                    case ArgumentRegister.R9:
-                        asm->MovR9PspPtrOff32(offset);
-                        break;
-                }
-            }
-
-            void ThrowNotImpemented()
-            {
-                throw new KornException(
-                    "Korn.Hooking.MethodStub.WriteRoutineCode: ",
-                    "Not implemented action for assembler"
-                );
-            }
         }
 
         void PrepareRedirection()

@@ -24,7 +24,6 @@ static class JitWatcher
     public static void AddMethodToQueue(MethodStatement method)
     {
         methodPool.Add(method);
-        KornShared.Logger.WriteMessage($"pool {methodPool.Count}. addeed");
     }
 
     static void Body()
@@ -47,7 +46,6 @@ static class JitWatcher
             if (index >= count)
                 index = 0;
 
-            // deletion from the pool performs in only one thread, so we don't have to worry about the index being less than count
             var method = methodPool[index];
             var pointer = method.DelegatePointer;
 
@@ -57,7 +55,6 @@ static class JitWatcher
                 if (!hasTieredCompilation)
                 {
                     Finalize();
-                    //KornShared.Logger.WriteMessage($"pool {methodPool.Count}. no tiered compilation");
                 }
                 continue;
             }
@@ -72,7 +69,6 @@ static class JitWatcher
                 if (!hasTieredCompilation)
                 {
                     Finalize();
-                    //KornShared.Logger.WriteMessage($"pool {methodPool.Count}. no tiered compilation");
                 }
                 continue;
             }
@@ -82,7 +78,6 @@ static class JitWatcher
             MethodAsmCodeDetermination.TieredCompilationCounter.NopCounter(pointer);
             KornShared.Logger.WriteMessage($"Disabled jit counter for method {method.Method.Name}");
 
-            //KornShared.Logger.WriteMessage($"pool {methodPool.Count}. disabled jit counter");
             Finalize();
 
             void Finalize()
